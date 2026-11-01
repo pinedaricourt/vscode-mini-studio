@@ -17,7 +17,7 @@ Extensión de VS Code que lo convierte en un **mini Visual Studio Community** pa
 | Detener (Shift+F5) | Cierra la app en ejecución |
 | Agregar → Clase / Interfaz / Windows Form / Carpeta | Clic derecho en un proyecto o carpeta; el espacio de nombres se calcula según la carpeta |
 | Administrar paquetes NuGet | *Agregar paquete NuGet...* (`Id` o `Id@versión`) y quitar desde Dependencias |
-| Diseñador de Windows Forms | Clic en un formulario o **Shift+F7**. Ver código con **F7** |
+| Diseñador de Windows Forms | Al abrir un formulario (desde cualquier explorador) sale el **diseñador**, como en VS. Ver código con **F7**; volver al diseño con **Shift+F7** |
 
 ### Diseñador de formularios
 
@@ -48,7 +48,7 @@ Extensión de VS Code que lo convierte en un **mini Visual Studio Community** pa
 Descarga el `.vsix` de [Releases](https://github.com/pinedaricourt/vscode-mini-studio/releases) e instálalo:
 
 ```bash
-code --install-extension mini-studio-0.2.1.vsix
+code --install-extension mini-studio-0.3.0.vsix
 ```
 
 O desde el código fuente:
@@ -77,6 +77,7 @@ Pulsa F5 en VS Code con esta carpeta abierta para lanzar una ventana de prueba c
 | `miniStudio.build.verbosity` | `minimal` | Detalle de `dotnet build` |
 | `miniStudio.build.msbuildPath` | (vacío) | MSBuild.exe para proyectos .NET Framework; vacío = se busca con vswhere |
 | `miniStudio.build.saveAllBeforeBuild` | `true` | Guardar todo antes de compilar |
+| `miniStudio.designer.openByDefault` | `true` | Abrir los formularios en el diseñador en vez de como código |
 | `miniStudio.designer.gridSize` | `4` | Cuadrícula del diseñador (px) |
 
 ## Limitaciones

@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.3.0
+
+- Los formularios se abren en el diseñador por defecto, también desde el explorador normal de VS Code. El código se abre con F7 / Ver código, al hacer doble clic en un control o desde Problemas / Ir a definición. Ajuste `miniStudio.designer.openByDefault`.
+
 ## 0.2.1
 
 - F5 en proyectos .NET Framework: se compila sin "Preferir 32 bits" (el depurador de VS Code solo depura procesos de 64 bits; antes fallaba con "Unable to start program"). Si el proyecto es x86 se ofrece iniciar sin depurar.

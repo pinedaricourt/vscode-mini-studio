@@ -7,6 +7,7 @@ import { Builder, BuildKind } from './builder';
 import { Runner } from './runner';
 import * as templates from './templates';
 import { DesignerPanel } from './designer/designerPanel';
+import { allowCode, registerOpenByDefault } from './designer/openByDefault';
 
 const CONFIGS = ['Debug', 'Release'];
 
@@ -92,6 +93,7 @@ export function activate(context: vscode.ExtensionContext) {
         vscode.commands.executeCommand('setContext', 'miniStudio.isFormFile', !!f && isFormFile(codeFileFor(f)));
     }
     context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(updateFormContext));
+    registerOpenByDefault(context, file => DesignerPanel.open(context, file));
 
     // ------------------------------------------------------------- utilidades de comandos
     /** Proyecto a partir del nodo del árbol, del archivo activo o preguntando. */
@@ -258,7 +260,7 @@ export function activate(context: vscode.ExtensionContext) {
     });
     reg('miniStudio.viewCode', async (arg?: Node) => {
         const file = arg?.fsPath ?? DesignerPanel.activeCodeFile();
-        if (file) { await vscode.window.showTextDocument(vscode.Uri.file(codeFileFor(file))); }
+        if (file) { allowCode(codeFileFor(file)); await vscode.window.showTextDocument(vscode.Uri.file(codeFileFor(file))); }
     });
     reg('miniStudio.openProjectFile', async (n?: Node) => {
         const p = await resolveProject(n);

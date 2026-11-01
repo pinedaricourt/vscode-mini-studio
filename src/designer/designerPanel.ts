@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { DForm, parseDesigner, generateDesigner, matchBrace, eventArgsType } from './model';
 import { codeFileFor, designerFileFor } from '../projects';
+import { allowCode } from './openByDefault';
 
 /** Un panel de diseñador por formulario. */
 export class DesignerPanel {
@@ -132,6 +133,7 @@ export class DesignerPanel {
             await vscode.workspace.applyEdit(edit);
             await doc.save();
         }
+        allowCode(codeFile);
         const editor = await vscode.window.showTextDocument(doc, vscode.ViewColumn.Active);
         const pos = doc.positionAt(offset).translate(1, 0);
         const line = doc.lineAt(Math.min(pos.line, doc.lineCount - 1));
@@ -191,6 +193,7 @@ function shortenArgs(full: string, codeText: string): string {
 }
 
 async function openCode(file: string) {
+    allowCode(file);
     const doc = await vscode.workspace.openTextDocument(file);
     await vscode.window.showTextDocument(doc, vscode.ViewColumn.Active);
 }
