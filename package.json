@@ -1,0 +1,190 @@
+{
+  "name": "mini-studio",
+  "displayName": "Mini Studio para .NET",
+  "description": "Convierte VS Code en un mini Visual Studio Community: explorador de soluciones, compilar/ejecutar/depurar apps de consola y Windows Forms, plantillas y diseñador visual de formularios.",
+  "version": "0.1.0",
+  "publisher": "pinedaricourt",
+  "license": "MIT",
+  "icon": "media/icon.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/pinedaricourt/vscode-mini-studio.git"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Debuggers",
+    "Other"
+  ],
+  "keywords": [
+    "dotnet",
+    "csharp",
+    "winforms",
+    "windows forms",
+    "visual studio",
+    "console"
+  ],
+  "activationEvents": [
+    "workspaceContains:**/*.csproj",
+    "workspaceContains:**/*.vbproj",
+    "workspaceContains:**/*.sln",
+    "onStartupFinished"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "miniStudio",
+          "title": "Mini Studio",
+          "icon": "media/activity.svg"
+        }
+      ]
+    },
+    "views": {
+      "miniStudio": [
+        {
+          "id": "miniStudio.solutionExplorer",
+          "name": "Explorador de soluciones"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "miniStudio.solutionExplorer",
+        "contents": "No hay ningún proyecto .NET en esta carpeta.\n[Crear un proyecto nuevo](command:miniStudio.newProject)\n[Abrir una carpeta](command:workbench.action.files.openFolder)"
+      }
+    ],
+    "commands": [
+      { "command": "miniStudio.newProject", "title": "Nuevo proyecto...", "category": "Mini Studio", "icon": "$(new-folder)" },
+      { "command": "miniStudio.refresh", "title": "Actualizar", "category": "Mini Studio", "icon": "$(refresh)" },
+      { "command": "miniStudio.buildSolution", "title": "Compilar solución", "category": "Mini Studio", "icon": "$(tools)" },
+      { "command": "miniStudio.rebuildSolution", "title": "Recompilar solución", "category": "Mini Studio" },
+      { "command": "miniStudio.cleanSolution", "title": "Limpiar solución", "category": "Mini Studio" },
+      { "command": "miniStudio.buildProject", "title": "Compilar", "category": "Mini Studio" },
+      { "command": "miniStudio.rebuildProject", "title": "Recompilar", "category": "Mini Studio" },
+      { "command": "miniStudio.cleanProject", "title": "Limpiar", "category": "Mini Studio" },
+      { "command": "miniStudio.startDebugging", "title": "Iniciar depuración", "category": "Mini Studio", "icon": "$(debug-alt)" },
+      { "command": "miniStudio.startWithoutDebugging", "title": "Iniciar sin depurar", "category": "Mini Studio", "icon": "$(run)" },
+      { "command": "miniStudio.stop", "title": "Detener aplicación", "category": "Mini Studio", "icon": "$(debug-stop)" },
+      { "command": "miniStudio.setStartupProject", "title": "Establecer como proyecto de inicio", "category": "Mini Studio" },
+      { "command": "miniStudio.selectStartupProject", "title": "Seleccionar proyecto de inicio...", "category": "Mini Studio" },
+      { "command": "miniStudio.toggleConfiguration", "title": "Cambiar configuración (Debug/Release)", "category": "Mini Studio" },
+      { "command": "miniStudio.addClass", "title": "Agregar clase...", "category": "Mini Studio" },
+      { "command": "miniStudio.addInterface", "title": "Agregar interfaz...", "category": "Mini Studio" },
+      { "command": "miniStudio.addForm", "title": "Agregar Windows Form...", "category": "Mini Studio" },
+      { "command": "miniStudio.addFolder", "title": "Nueva carpeta...", "category": "Mini Studio" },
+      { "command": "miniStudio.addPackage", "title": "Agregar paquete NuGet...", "category": "Mini Studio" },
+      { "command": "miniStudio.addProjectReference", "title": "Agregar referencia de proyecto...", "category": "Mini Studio" },
+      { "command": "miniStudio.removeReference", "title": "Quitar referencia", "category": "Mini Studio" },
+      { "command": "miniStudio.openDesigner", "title": "Ver diseñador", "category": "Mini Studio", "icon": "$(layout)" },
+      { "command": "miniStudio.viewCode", "title": "Ver código", "category": "Mini Studio", "icon": "$(code)" },
+      { "command": "miniStudio.openProjectFile", "title": "Editar archivo de proyecto", "category": "Mini Studio" },
+      { "command": "miniStudio.revealInOS", "title": "Abrir carpeta en el Explorador de archivos", "category": "Mini Studio" },
+      { "command": "miniStudio.deleteItem", "title": "Eliminar", "category": "Mini Studio" }
+    ],
+    "menus": {
+      "view/title": [
+        { "command": "miniStudio.newProject", "when": "view == miniStudio.solutionExplorer", "group": "navigation@1" },
+        { "command": "miniStudio.buildSolution", "when": "view == miniStudio.solutionExplorer && miniStudio.hasProjects", "group": "navigation@2" },
+        { "command": "miniStudio.startWithoutDebugging", "when": "view == miniStudio.solutionExplorer && miniStudio.hasProjects", "group": "navigation@3" },
+        { "command": "miniStudio.refresh", "when": "view == miniStudio.solutionExplorer", "group": "navigation@4" },
+        { "command": "miniStudio.rebuildSolution", "when": "view == miniStudio.solutionExplorer && miniStudio.hasProjects", "group": "1_build" },
+        { "command": "miniStudio.cleanSolution", "when": "view == miniStudio.solutionExplorer && miniStudio.hasProjects", "group": "1_build" },
+        { "command": "miniStudio.toggleConfiguration", "when": "view == miniStudio.solutionExplorer && miniStudio.hasProjects", "group": "2_config" },
+        { "command": "miniStudio.selectStartupProject", "when": "view == miniStudio.solutionExplorer && miniStudio.hasProjects", "group": "2_config" }
+      ],
+      "view/item/context": [
+        { "command": "miniStudio.buildSolution", "when": "view == miniStudio.solutionExplorer && viewItem == solution", "group": "1_build@1" },
+        { "command": "miniStudio.rebuildSolution", "when": "view == miniStudio.solutionExplorer && viewItem == solution", "group": "1_build@2" },
+        { "command": "miniStudio.cleanSolution", "when": "view == miniStudio.solutionExplorer && viewItem == solution", "group": "1_build@3" },
+        { "command": "miniStudio.newProject", "when": "view == miniStudio.solutionExplorer && viewItem == solution", "group": "2_add" },
+        { "command": "miniStudio.buildProject", "when": "view == miniStudio.solutionExplorer && viewItem =~ /^project/", "group": "1_build@1" },
+        { "command": "miniStudio.rebuildProject", "when": "view == miniStudio.solutionExplorer && viewItem =~ /^project/", "group": "1_build@2" },
+        { "command": "miniStudio.cleanProject", "when": "view == miniStudio.solutionExplorer && viewItem =~ /^project/", "group": "1_build@3" },
+        { "command": "miniStudio.addClass", "when": "view == miniStudio.solutionExplorer && viewItem =~ /^(project|folder)/", "group": "2_add@1" },
+        { "command": "miniStudio.addInterface", "when": "view == miniStudio.solutionExplorer && viewItem =~ /^(project|folder)/", "group": "2_add@2" },
+        { "command": "miniStudio.addForm", "when": "view == miniStudio.solutionExplorer && viewItem =~ /^(project|folder)/", "group": "2_add@3" },
+        { "command": "miniStudio.addFolder", "when": "view == miniStudio.solutionExplorer && viewItem =~ /^(project|folder)/", "group": "2_add@4" },
+        { "command": "miniStudio.addPackage", "when": "view == miniStudio.solutionExplorer && viewItem =~ /^(project|dependencies)/", "group": "3_refs@1" },
+        { "command": "miniStudio.addProjectReference", "when": "view == miniStudio.solutionExplorer && viewItem =~ /^(project|dependencies)/", "group": "3_refs@2" },
+        { "command": "miniStudio.removeReference", "when": "view == miniStudio.solutionExplorer && viewItem =~ /^(package|projectRef)$/", "group": "3_refs@3" },
+        { "command": "miniStudio.setStartupProject", "when": "view == miniStudio.solutionExplorer && viewItem == project", "group": "4_run@1" },
+        { "command": "miniStudio.openProjectFile", "when": "view == miniStudio.solutionExplorer && viewItem =~ /^project/", "group": "5_misc@1" },
+        { "command": "miniStudio.openDesigner", "when": "view == miniStudio.solutionExplorer && viewItem == form", "group": "0_open@1" },
+        { "command": "miniStudio.viewCode", "when": "view == miniStudio.solutionExplorer && viewItem == form", "group": "0_open@2" },
+        { "command": "miniStudio.revealInOS", "when": "view == miniStudio.solutionExplorer && viewItem =~ /^(solution|project|folder|file|form)/", "group": "5_misc@2" },
+        { "command": "miniStudio.deleteItem", "when": "view == miniStudio.solutionExplorer && viewItem =~ /^(folder|file|form)$/", "group": "9_delete" }
+      ],
+      "editor/title": [
+        { "command": "miniStudio.openDesigner", "when": "miniStudio.isFormFile", "group": "navigation@1" },
+        { "command": "miniStudio.startWithoutDebugging", "when": "miniStudio.hasProjects && resourceExtname =~ /^\\.(cs|vb|csproj|vbproj)$/", "group": "navigation@2" },
+        { "command": "miniStudio.viewCode", "when": "activeWebviewPanelId == miniStudio.designer", "group": "navigation@1" }
+      ],
+      "commandPalette": [
+        { "command": "miniStudio.setStartupProject", "when": "false" },
+        { "command": "miniStudio.buildProject", "when": "false" },
+        { "command": "miniStudio.rebuildProject", "when": "false" },
+        { "command": "miniStudio.cleanProject", "when": "false" },
+        { "command": "miniStudio.removeReference", "when": "false" },
+        { "command": "miniStudio.deleteItem", "when": "false" },
+        { "command": "miniStudio.revealInOS", "when": "false" }
+      ]
+    },
+    "keybindings": [
+      { "command": "miniStudio.buildSolution", "key": "ctrl+shift+b", "when": "miniStudio.hasProjects" },
+      { "command": "miniStudio.startDebugging", "key": "f5", "when": "miniStudio.hasProjects && !inDebugMode" },
+      { "command": "miniStudio.startWithoutDebugging", "key": "ctrl+f5", "when": "miniStudio.hasProjects && !inDebugMode" },
+      { "command": "miniStudio.stop", "key": "shift+f5", "when": "miniStudio.appRunning && !inDebugMode" },
+      { "command": "miniStudio.openDesigner", "key": "shift+f7", "when": "miniStudio.isFormFile && editorFocus" },
+      { "command": "miniStudio.viewCode", "key": "f7", "when": "activeWebviewPanelId == miniStudio.designer" }
+    ],
+    "configuration": {
+      "title": "Mini Studio",
+      "properties": {
+        "miniStudio.console.runIn": {
+          "type": "string",
+          "enum": ["integratedTerminal", "externalWindow"],
+          "enumDescriptions": [
+            "Ejecuta las apps de consola en la terminal integrada de VS Code.",
+            "Abre una ventana de consola aparte que espera una tecla al terminar (como Visual Studio)."
+          ],
+          "default": "integratedTerminal",
+          "description": "Dónde se ejecutan las apps de consola con 'Iniciar sin depurar'."
+        },
+        "miniStudio.build.verbosity": {
+          "type": "string",
+          "enum": ["quiet", "minimal", "normal", "detailed"],
+          "default": "minimal",
+          "description": "Nivel de detalle de la salida de compilación."
+        },
+        "miniStudio.build.saveAllBeforeBuild": {
+          "type": "boolean",
+          "default": true,
+          "description": "Guarda todos los archivos antes de compilar."
+        },
+        "miniStudio.designer.gridSize": {
+          "type": "number",
+          "default": 4,
+          "minimum": 1,
+          "description": "Tamaño de la cuadrícula (px) al mover controles en el diseñador."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile && node out/test/designerModel.test.js",
+    "package": "vsce package"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.2.0",
+    "typescript": "^5.4.0"
+  }
+}

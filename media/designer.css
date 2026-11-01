@@ -1,0 +1,114 @@
+* { box-sizing: border-box; }
+html, body { height: 100%; margin: 0; padding: 0; overflow: hidden; }
+body {
+    font-family: var(--vscode-font-family);
+    font-size: var(--vscode-font-size);
+    color: var(--vscode-foreground);
+    background: var(--vscode-editor-background);
+    user-select: none;
+}
+#app { display: grid; grid-template-columns: 180px 1fr 280px; height: 100vh; }
+
+/* ---------- paneles laterales ---------- */
+aside { display: flex; flex-direction: column; min-height: 0; background: var(--vscode-sideBar-background); border-color: var(--vscode-panel-border); border-style: solid; border-width: 0; }
+#toolbox { border-right-width: 1px; }
+#props { border-left-width: 1px; }
+.pane-title { padding: 6px 10px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; color: var(--vscode-sideBarTitle-foreground); }
+input, select, textarea, button {
+    font-family: inherit; font-size: 12px; color: var(--vscode-input-foreground);
+    background: var(--vscode-input-background); border: 1px solid var(--vscode-input-border, transparent); border-radius: 2px;
+}
+input:focus, select:focus, textarea:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+#toolFilter, #selCombo { margin: 0 8px 6px; padding: 3px 6px; }
+#tools { overflow-y: auto; flex: 1; padding-bottom: 8px; }
+.tool-group { padding: 6px 10px 2px; font-size: 11px; opacity: .7; }
+.tool { display: flex; align-items: center; gap: 8px; padding: 3px 12px; cursor: grab; }
+.tool:hover { background: var(--vscode-list-hoverBackground); }
+.tool .ti { width: 18px; text-align: center; opacity: .85; font-size: 13px; }
+
+/* ---------- barra y superficie ---------- */
+main { display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+#toolbar { display: flex; align-items: center; gap: 4px; padding: 4px 8px; border-bottom: 1px solid var(--vscode-panel-border); }
+#toolbar button { padding: 2px 8px; cursor: pointer; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); border: none; }
+#toolbar button:hover { background: var(--vscode-button-secondaryHoverBackground); }
+#toolbar .sep { width: 1px; height: 16px; background: var(--vscode-panel-border); margin: 0 4px; }
+#status { margin-left: auto; opacity: .75; font-size: 12px; font-variant-numeric: tabular-nums; }
+#surfaceScroll { flex: 1; overflow: auto; padding: 24px; position: relative; }
+
+#formWin {
+    position: relative; display: inline-block; background: #fff; border: 1px solid #7a7a7a;
+    box-shadow: 0 4px 18px rgba(0,0,0,.25);
+}
+#formWin.selected { outline: 1px dashed var(--vscode-focusBorder); outline-offset: 3px; }
+#formTitle { height: 30px; display: flex; align-items: center; justify-content: space-between; padding: 0 10px; background: #fff; color: #000; font: 12px "Segoe UI", sans-serif; border-bottom: 1px solid #e5e5e5; }
+#formTitle .wbtns { letter-spacing: 14px; color: #333; }
+#surface {
+    position: relative; overflow: hidden; background-color: #f0f0f0; color: #000;
+    font: 12px "Segoe UI", Tahoma, sans-serif;
+    background-image: radial-gradient(rgba(0,0,0,.18) 1px, transparent 1px);
+    background-size: 8px 8px;
+}
+#formGrip { position: absolute; right: -6px; bottom: -6px; width: 10px; height: 10px; background: #fff; border: 1px solid #333; cursor: nwse-resize; }
+#tray { margin-top: 18px; min-height: 0; display: flex; gap: 8px; flex-wrap: wrap; }
+#tray:empty { display: none; }
+#tray .comp { padding: 4px 10px; border: 1px solid var(--vscode-panel-border); border-radius: 3px; background: var(--vscode-editorWidget-background); cursor: default; }
+#tray .comp.sel { outline: 1px solid var(--vscode-focusBorder); }
+
+/* ---------- controles (aspecto Windows) ---------- */
+.ctl { position: absolute; overflow: hidden; white-space: nowrap; cursor: move; line-height: 1.25; }
+.ctl.dragging { opacity: .8; }
+.ctl.drop-target { outline: 2px solid #0078d7; outline-offset: -2px; }
+.t-Button { background: #e1e1e1; border: 1px solid #adadad; display: flex; align-items: center; justify-content: center; }
+.t-Label, .t-LinkLabel, .t-CheckBox, .t-RadioButton { display: flex; align-items: center; }
+.t-Label.auto, .t-LinkLabel.auto, .t-CheckBox.auto, .t-RadioButton.auto { width: auto !important; height: auto !important; padding: 0 1px; }
+.t-LinkLabel { color: #0066cc; text-decoration: underline; }
+.t-TextBox, .t-RichTextBox, .t-MaskedTextBox, .t-ComboBox, .t-NumericUpDown, .t-DateTimePicker, .t-ListBox, .t-CheckedListBox {
+    background: #fff; border: 1px solid #7a7a7a; padding: 2px 4px;
+}
+.t-TextBox, .t-MaskedTextBox { display: flex; align-items: center; }
+.t-TextBox.multi, .t-RichTextBox { align-items: flex-start; white-space: pre-wrap; }
+.box, .radio { display: inline-block; width: 13px; height: 13px; border: 1px solid #333; background: #fff; margin-right: 5px; flex: none; font-size: 10px; line-height: 11px; text-align: center; }
+.radio { border-radius: 50%; position: relative; }
+.radio.on::after { content: ""; position: absolute; inset: 3px; border-radius: 50%; background: #333; }
+.t-ComboBox, .t-NumericUpDown, .t-DateTimePicker { display: flex; align-items: center; justify-content: space-between; }
+.dd { border-left: 1px solid #ccc; padding-left: 4px; }
+.t-ListBox .it, .t-CheckedListBox .it { line-height: 16px; }
+.t-PictureBox { border: 1px dashed #999; display: flex; align-items: center; justify-content: center; color: #999; }
+.t-Panel, .t-FlowLayoutPanel, .t-TableLayoutPanel, .t-TabPage, .t-SplitContainer { border: 1px dashed #999; }
+.border-single { border: 1px solid #333 !important; }
+.border-3d { border: 2px inset #ddd !important; }
+.t-GroupBox { border: none; }
+.t-GroupBox .gframe { position: absolute; inset: 7px 0 0 0; border: 1px solid #d0d0d0; border-radius: 2px; pointer-events: none; }
+.t-GroupBox .glegend { position: absolute; left: 7px; top: 0; padding: 0 2px; background: inherit; pointer-events: none; }
+.t-DataGridView { background: #ababab; border: 1px solid #888; }
+.t-DataGridView .hdr { height: 24px; background: #fff; border-bottom: 1px solid #ccc; width: 42px; }
+.t-ProgressBar { background: #e6e6e6; border: 1px solid #bcbcbc; }
+.t-ProgressBar .fill { height: 100%; background: #06b025; }
+.t-TrackBar .rail { position: absolute; left: 10px; right: 10px; top: 12px; height: 4px; background: #e7eaea; border: 1px solid #d6d6d6; }
+.t-TrackBar .thumb { position: absolute; left: 10px; top: 4px; width: 10px; height: 20px; background: #007ad9; border-radius: 2px; }
+.t-Generic { border: 1px solid #999; background: #fafafa; display: flex; align-items: center; justify-content: center; color: #666; }
+
+/* ---------- selección ---------- */
+#overlay { position: absolute; inset: 0; pointer-events: none; }
+.selbox { position: absolute; border: 1px dashed #0078d7; pointer-events: none; }
+.handle { position: absolute; width: 7px; height: 7px; background: #fff; border: 1px solid #0078d7; pointer-events: auto; }
+
+/* ---------- propiedades ---------- */
+#tabs { display: flex; gap: 2px; margin: 0 8px 4px; }
+#tabs button { flex: 1; padding: 3px; cursor: pointer; border: none; background: transparent; color: var(--vscode-foreground); opacity: .7; border-bottom: 2px solid transparent; }
+#tabs button.on { opacity: 1; border-bottom-color: var(--vscode-focusBorder); }
+#grid { overflow-y: auto; flex: 1; padding-bottom: 12px; }
+.cat { padding: 6px 10px 3px; font-weight: 600; font-size: 11px; opacity: .8; }
+.row { display: grid; grid-template-columns: 42% 58%; align-items: center; padding: 1px 8px 1px 14px; min-height: 24px; }
+.row:hover { background: var(--vscode-list-hoverBackground); }
+.row label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-right: 6px; }
+.row label.set { font-weight: 600; }
+.row .ed { display: flex; gap: 3px; min-width: 0; }
+.row input, .row select { width: 100%; min-width: 0; padding: 2px 4px; }
+.row input[type=checkbox] { width: auto; }
+.row input[type=color] { width: 28px; padding: 0 1px; height: 22px; flex: none; }
+.row textarea { width: 100%; min-height: 70px; resize: vertical; }
+.row button { padding: 0 6px; cursor: pointer; }
+.row.wide { grid-template-columns: 1fr; }
+.hint { padding: 8px 12px; opacity: .65; font-size: 11px; line-height: 1.4; }
+.ghost { position: fixed; z-index: 1000; pointer-events: none; padding: 3px 8px; border-radius: 3px; background: var(--vscode-editorWidget-background, #333); color: var(--vscode-foreground); border: 1px solid var(--vscode-focusBorder); font-size: 12px; }

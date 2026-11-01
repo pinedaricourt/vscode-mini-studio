@@ -1,0 +1,269 @@
+import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
+import { discover, Workspace, ProjectInfo, readCsproj, findProjectForPath, isFormFile, codeFileFor, norm } from './projects';
+import { SolutionExplorer, Node } from './solutionExplorer';
+import { Builder, BuildKind } from './builder';
+import { Runner } from './runner';
+import * as templates from './templates';
+import { DesignerPanel } from './designer/designerPanel';
+
+const CONFIGS = ['Debug', 'Release'];
+
+export function activate(context: vscode.ExtensionContext) {
+    const explorer = new SolutionExplorer();
+    const builder = new Builder();
+    const runner = new Runner(context);
+    const general = vscode.window.createOutputChannel('Mini Studio');
+    let ws: Workspace = { solutions: [], looseProjects: [], allProjects: [] };
+
+    const tree = vscode.window.createTreeView('miniStudio.solutionExplorer', { treeDataProvider: explorer, showCollapseAll: true });
+    context.subscriptions.push(tree, builder.output, builder.diagnostics, runner.output, general);
+
+    // ------------------------------------------------------------- estado
+    const configuration = () => context.workspaceState.get<string>('configuration', 'Debug');
+    const startupFile = () => context.workspaceState.get<string>('startupProject');
+
+    const sbBuild = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
+    sbBuild.command = 'miniStudio.buildSolution';
+    sbBuild.text = '$(tools) Compilar';
+    sbBuild.tooltip = 'Compilar solución (Ctrl+Shift+B)';
+    const sbConfig = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 99);
+    sbConfig.command = 'miniStudio.toggleConfiguration';
+    sbConfig.tooltip = 'Configuración de compilación (clic para cambiar)';
+    const sbStart = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 98);
+    sbStart.command = 'miniStudio.startDebugging';
+    const sbRun = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 97);
+    sbRun.command = 'miniStudio.startWithoutDebugging';
+    sbRun.text = '$(run)';
+    sbRun.tooltip = 'Iniciar sin depurar (Ctrl+F5)';
+    const sbStop = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 96);
+    sbStop.command = 'miniStudio.stop';
+    sbStop.text = '$(debug-stop)';
+    sbStop.tooltip = 'Detener la aplicación (Shift+F5)';
+    sbStop.color = new vscode.ThemeColor('debugIcon.stopForeground');
+    context.subscriptions.push(sbBuild, sbConfig, sbStart, sbRun, sbStop);
+
+    function startupProject(): ProjectInfo | undefined {
+        const s = startupFile();
+        return s ? ws.allProjects.find(p => norm(p.file) === norm(s)) : undefined;
+    }
+
+    function updateStatus(busyText?: string) {
+        const has = ws.allProjects.length > 0;
+        vscode.commands.executeCommand('setContext', 'miniStudio.hasProjects', has);
+        if (!has) { [sbBuild, sbConfig, sbStart, sbRun, sbStop].forEach(i => i.hide()); return; }
+        sbBuild.text = busyText ?? '$(tools) Compilar';
+        sbConfig.text = `$(gear) ${configuration()}`;
+        const sp = startupProject();
+        sbStart.text = `$(debug-start) ${sp ? sp.name : 'Iniciar'}`;
+        sbStart.tooltip = sp ? `Iniciar depuración de ${sp.name} (F5) — clic derecho en un proyecto del explorador para cambiarlo` : 'Iniciar depuración (F5)';
+        [sbBuild, sbConfig, sbStart, sbRun].forEach(i => i.show());
+        if (runner.isRunning) { sbStop.show(); } else { sbStop.hide(); }
+    }
+    runner.onDidChangeRunning(() => updateStatus());
+
+    // ------------------------------------------------------------- descubrimiento
+    let refreshTimer: NodeJS.Timeout | undefined;
+    async function refresh() {
+        ws = await discover();
+        // proyecto de inicio por defecto: el primer ejecutable
+        if (!startupProject()) {
+            const exe = ws.allProjects.find(p => /exe/i.test(readCsproj(p.file).outputType)) ?? ws.allProjects[0];
+            await context.workspaceState.update('startupProject', exe?.file);
+        }
+        explorer.setWorkspace(ws, startupFile());
+        updateStatus();
+        updateFormContext();
+    }
+    const scheduleRefresh = (uri?: vscode.Uri) => {
+        if (uri && /[\\/](bin|obj|\.git|\.vs)[\\/]/i.test(uri.fsPath)) { return; }
+        clearTimeout(refreshTimer);
+        refreshTimer = setTimeout(refresh, 300);
+    };
+    const watcher = vscode.workspace.createFileSystemWatcher('**/*');
+    watcher.onDidCreate(scheduleRefresh);
+    watcher.onDidDelete(scheduleRefresh);
+    watcher.onDidChange(u => { if (/\.(sln|csproj|vbproj)$/i.test(u.fsPath)) { scheduleRefresh(u); } });
+    context.subscriptions.push(watcher, vscode.workspace.onDidChangeWorkspaceFolders(() => refresh()));
+
+    function updateFormContext() {
+        const f = vscode.window.activeTextEditor?.document.uri.fsPath;
+        vscode.commands.executeCommand('setContext', 'miniStudio.isFormFile', !!f && isFormFile(codeFileFor(f)));
+    }
+    context.subscriptions.push(vscode.window.onDidChangeActiveTextEditor(updateFormContext));
+
+    // ------------------------------------------------------------- utilidades de comandos
+    /** Proyecto a partir del nodo del árbol, del archivo activo o preguntando. */
+    async function resolveProject(n?: Node): Promise<ProjectInfo | undefined> {
+        if (n?.project) { return n.project; }
+        const active = vscode.window.activeTextEditor?.document.uri.fsPath;
+        const fromActive = active ? findProjectForPath(ws, active) : undefined;
+        if (fromActive) { return fromActive; }
+        if (ws.allProjects.length === 1) { return ws.allProjects[0]; }
+        const pick = await vscode.window.showQuickPick(ws.allProjects.map(p => ({ label: p.name, description: p.file, p })), { title: 'Elige un proyecto' });
+        return pick?.p;
+    }
+
+    function folderOf(n: Node | undefined, p: ProjectInfo): string {
+        if (n?.kind === 'folder' && n.fsPath) { return n.fsPath; }
+        const active = vscode.window.activeTextEditor?.document.uri.fsPath;
+        if (!n && active && findProjectForPath(ws, active) === p) { return path.dirname(active); }
+        return p.dir;
+    }
+
+    function buildTarget(): string | undefined {
+        if (ws.solutions.length) { return ws.solutions[0].file; }
+        return startupProject()?.file ?? ws.allProjects[0]?.file;
+    }
+
+    async function build(kind: BuildKind, target: string | undefined) {
+        if (!target) { vscode.window.showWarningMessage('No hay ninguna solución ni proyecto para compilar.'); return false; }
+        return builder.run(kind, target, configuration(), t => updateStatus(t));
+    }
+
+    async function ensureStartup(): Promise<ProjectInfo | undefined> {
+        let p = startupProject();
+        if (!p) {
+            const exes = ws.allProjects.filter(x => /exe/i.test(readCsproj(x.file).outputType));
+            if (!exes.length) { vscode.window.showWarningMessage('No hay ningún proyecto ejecutable (consola o Windows Forms).'); return; }
+            p = exes[0];
+            await context.workspaceState.update('startupProject', p.file);
+            refresh();
+        }
+        return p;
+    }
+
+    async function start(debug: boolean) {
+        const p = await ensureStartup();
+        if (!p) { return; }
+        if (builder.isBusy) { return; }
+        if (!await build('build', p.file)) { return; }
+        const info = await runner.resolveTarget(p, configuration());
+        if (!info) { return; }
+        if (debug) { await runner.startDebugging(p, info, vscode.workspace.getWorkspaceFolder(vscode.Uri.file(p.file))); }
+        else { await runner.startWithoutDebugging(p, info); }
+    }
+
+    const reg = (id: string, fn: (...a: any[]) => any) =>
+        context.subscriptions.push(vscode.commands.registerCommand(id, async (...a) => {
+            try { await fn(...a); } catch (e) { vscode.window.showErrorMessage((e as Error).message); }
+        }));
+
+    // ------------------------------------------------------------- comandos
+    reg('miniStudio.refresh', refresh);
+
+    reg('miniStudio.newProject', async () => {
+        const proj = await templates.newProject(ws, general);
+        if (!proj) { return; }
+        const inWorkspace = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(proj));
+        if (!inWorkspace) {
+            const sln = path.dirname(path.dirname(proj));
+            const pick = await vscode.window.showInformationMessage(`Proyecto creado en ${sln}. ¿Abrir la carpeta de la solución?`, 'Abrir', 'Abrir en ventana nueva');
+            if (pick) { await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(sln), { forceNewWindow: pick !== 'Abrir' }); }
+            return;
+        }
+        await refresh();
+        const created = ws.allProjects.find(p => norm(p.file) === norm(proj));
+        if (created && /exe/i.test(readCsproj(proj).outputType)) { await context.workspaceState.update('startupProject', proj); await refresh(); }
+        const main = ['Form1.cs', 'Program.cs', 'Program.vb', 'Class1.cs'].map(f => path.join(path.dirname(proj), f)).find(f => fs.existsSync(f));
+        if (main && /Form1\.cs$/.test(main)) { DesignerPanel.open(context, main); }
+        else if (main) { await vscode.window.showTextDocument(vscode.Uri.file(main)); }
+    });
+
+    reg('miniStudio.buildSolution', () => build('build', buildTarget()));
+    reg('miniStudio.rebuildSolution', () => build('rebuild', buildTarget()));
+    reg('miniStudio.cleanSolution', () => build('clean', buildTarget()));
+    reg('miniStudio.buildProject', async (n?: Node) => build('build', (await resolveProject(n))?.file));
+    reg('miniStudio.rebuildProject', async (n?: Node) => build('rebuild', (await resolveProject(n))?.file));
+    reg('miniStudio.cleanProject', async (n?: Node) => build('clean', (await resolveProject(n))?.file));
+
+    reg('miniStudio.startDebugging', () => start(true));
+    reg('miniStudio.startWithoutDebugging', () => start(false));
+    reg('miniStudio.stop', () => runner.stop());
+
+    reg('miniStudio.setStartupProject', async (n?: Node) => {
+        const p = await resolveProject(n);
+        if (!p) { return; }
+        await context.workspaceState.update('startupProject', p.file);
+        await refresh();
+    });
+    reg('miniStudio.selectStartupProject', async () => {
+        const pick = await vscode.window.showQuickPick(ws.allProjects.map(p => ({
+            label: p.name, description: readCsproj(p.file).outputType, detail: p.file, p,
+        })), { title: 'Proyecto de inicio' });
+        if (pick) { await context.workspaceState.update('startupProject', pick.p.file); await refresh(); }
+    });
+    reg('miniStudio.toggleConfiguration', async () => {
+        const next = CONFIGS[(CONFIGS.indexOf(configuration()) + 1) % CONFIGS.length];
+        await context.workspaceState.update('configuration', next);
+        updateStatus();
+    });
+
+    reg('miniStudio.addClass', async (n?: Node) => {
+        const p = await resolveProject(n);
+        if (p) { await templates.addClass(p, folderOf(n, p), 'class'); }
+    });
+    reg('miniStudio.addInterface', async (n?: Node) => {
+        const p = await resolveProject(n);
+        if (p) { await templates.addClass(p, folderOf(n, p), 'interface'); }
+    });
+    reg('miniStudio.addForm', async (n?: Node) => {
+        const p = await resolveProject(n);
+        if (!p) { return; }
+        const file = await templates.addForm(p, folderOf(n, p));
+        if (file) { await refresh(); DesignerPanel.open(context, file); }
+    });
+    reg('miniStudio.addFolder', async (n?: Node) => {
+        const p = await resolveProject(n);
+        if (p) { await templates.addFolder(n?.kind === 'folder' && n.fsPath ? n.fsPath : p.dir); }
+    });
+    reg('miniStudio.addPackage', async (n?: Node) => {
+        const p = await resolveProject(n);
+        if (p) { await templates.addPackage(p, general); explorer.setWorkspace(ws, startupFile()); }
+    });
+    reg('miniStudio.addProjectReference', async (n?: Node) => {
+        const p = await resolveProject(n);
+        if (p) { await templates.addProjectReference(ws, p, general); explorer.setWorkspace(ws, startupFile()); }
+    });
+    reg('miniStudio.removeReference', async (n?: Node) => {
+        if (!n?.project || !n.refName) { return; }
+        const ok = await vscode.window.showWarningMessage(`¿Quitar '${n.label}' de ${n.project.name}?`, { modal: true }, 'Quitar');
+        if (ok) { await templates.removeReference(n.project, n.kind === 'package' ? 'package' : 'projectRef', n.refName, general); explorer.setWorkspace(ws, startupFile()); }
+    });
+
+    reg('miniStudio.openDesigner', (arg?: Node | vscode.Uri) => {
+        const file = arg instanceof vscode.Uri ? arg.fsPath : arg?.fsPath ?? vscode.window.activeTextEditor?.document.uri.fsPath;
+        if (!file) { return; }
+        DesignerPanel.open(context, codeFileFor(file));
+    });
+    reg('miniStudio.viewCode', async (arg?: Node) => {
+        const file = arg?.fsPath ?? DesignerPanel.activeCodeFile();
+        if (file) { await vscode.window.showTextDocument(vscode.Uri.file(codeFileFor(file))); }
+    });
+    reg('miniStudio.openProjectFile', async (n?: Node) => {
+        const p = await resolveProject(n);
+        if (p) { await vscode.window.showTextDocument(vscode.Uri.file(p.file)); }
+    });
+    reg('miniStudio.revealInOS', (n?: Node) => {
+        const target = n?.kind === 'solution' ? n.solution!.file : n?.fsPath;
+        if (target) { vscode.commands.executeCommand('revealFileInOS', vscode.Uri.file(target)); }
+    });
+    reg('miniStudio.deleteItem', async (n?: Node) => {
+        if (!n?.fsPath) { return; }
+        const related = n.kind === 'form' || /\.cs$/i.test(n.fsPath)
+            ? [n.fsPath.replace(/\.cs$/i, '.Designer.cs'), n.fsPath.replace(/\.cs$/i, '.resx')].filter(f => f !== n.fsPath && fs.existsSync(f))
+            : [];
+        const names = [n.fsPath, ...related].map(f => path.basename(f)).join(', ');
+        const ok = await vscode.window.showWarningMessage(`¿Enviar a la papelera: ${names}?`, { modal: true }, 'Eliminar');
+        if (!ok) { return; }
+        for (const f of [n.fsPath, ...related]) {
+            await vscode.workspace.fs.delete(vscode.Uri.file(f), { recursive: true, useTrash: true });
+        }
+        await refresh();
+    });
+
+    refresh();
+}
+
+export function deactivate() { /* nada */ }

@@ -1,0 +1,183 @@
+import * as vscode from 'vscode';
+import * as path from 'path';
+import * as fs from 'fs';
+import { execFile } from 'child_process';
+
+export interface ProjectInfo {
+    name: string;
+    file: string;          // ruta absoluta del .csproj/.vbproj
+    dir: string;
+    lang: 'cs' | 'vb';
+}
+
+export interface SolutionInfo {
+    name: string;
+    file: string;
+    dir: string;
+    projects: ProjectInfo[];
+}
+
+export interface Workspace {
+    solutions: SolutionInfo[];
+    looseProjects: ProjectInfo[];   // proyectos que no están en ninguna .sln
+    allProjects: ProjectInfo[];
+}
+
+export interface CsprojData {
+    outputType: string;            // Exe, WinExe, Library
+    targetFramework: string;
+    useWindowsForms: boolean;
+    implicitUsings: boolean;
+    rootNamespace?: string;
+    packages: { name: string; version: string }[];
+    projectRefs: string[];         // rutas absolutas
+}
+
+const EXCLUDE = '**/{bin,obj,node_modules,.git,.vs}/**';
+
+export async function discover(): Promise<Workspace> {
+    const [slnUris, projUris] = await Promise.all([
+        vscode.workspace.findFiles('**/*.sln', EXCLUDE),
+        vscode.workspace.findFiles('**/*.{csproj,vbproj}', EXCLUDE),
+    ]);
+    const allProjects = projUris.map(u => toProject(u.fsPath)).sort((a, b) => a.name.localeCompare(b.name));
+    const byPath = new Map(allProjects.map(p => [norm(p.file), p]));
+    const inSolution = new Set<string>();
+
+    const solutions: SolutionInfo[] = [];
+    for (const u of slnUris) {
+        const file = u.fsPath;
+        const dir = path.dirname(file);
+        const projects: ProjectInfo[] = [];
+        for (const rel of parseSlnProjects(file)) {
+            const abs = path.resolve(dir, rel);
+            const p = byPath.get(norm(abs)) ?? (fs.existsSync(abs) ? toProject(abs) : undefined);
+            if (p) { projects.push(p); inSolution.add(norm(p.file)); }
+        }
+        solutions.push({ name: path.basename(file, '.sln'), file, dir, projects });
+    }
+    solutions.sort((a, b) => a.name.localeCompare(b.name));
+    const looseProjects = allProjects.filter(p => !inSolution.has(norm(p.file)));
+    return { solutions, looseProjects, allProjects };
+}
+
+function toProject(file: string): ProjectInfo {
+    return {
+        name: path.basename(file).replace(/\.(cs|vb)proj$/i, ''),
+        file,
+        dir: path.dirname(file),
+        lang: file.toLowerCase().endsWith('.vbproj') ? 'vb' : 'cs',
+    };
+}
+
+export function norm(p: string): string {
+    return path.normalize(p).toLowerCase();
+}
+
+function parseSlnProjects(file: string): string[] {
+    let text = '';
+    try { text = fs.readFileSync(file, 'utf8'); } catch { return []; }
+    const out: string[] = [];
+    const re = /^Project\("\{[^}]+\}"\)\s*=\s*"[^"]*",\s*"([^"]+\.(?:cs|vb)proj)"/gmi;
+    let m: RegExpExecArray | null;
+    while ((m = re.exec(text))) { out.push(m[1].replace(/\\/g, path.sep)); }
+    return out;
+}
+
+export function readCsproj(file: string): CsprojData {
+    let text = '';
+    try { text = fs.readFileSync(file, 'utf8'); } catch { /* vacío */ }
+    const tag = (name: string) => {
+        const m = new RegExp(`<${name}>\\s*([^<]*?)\\s*</${name}>`, 'i').exec(text);
+        return m ? m[1] : undefined;
+    };
+    const packages: { name: string; version: string }[] = [];
+    const pkgRe = /<PackageReference\s+Include="([^"]+)"(?:\s+Version="([^"]*)")?/gi;
+    let m: RegExpExecArray | null;
+    while ((m = pkgRe.exec(text))) { packages.push({ name: m[1], version: m[2] ?? '' }); }
+    const projectRefs: string[] = [];
+    const refRe = /<ProjectReference\s+Include="([^"]+)"/gi;
+    while ((m = refRe.exec(text))) { projectRefs.push(path.resolve(path.dirname(file), m[1].replace(/\\/g, path.sep))); }
+    return {
+        outputType: tag('OutputType') ?? 'Library',
+        targetFramework: tag('TargetFramework') ?? tag('TargetFrameworks')?.split(';')[0] ?? '',
+        useWindowsForms: /^true$/i.test(tag('UseWindowsForms') ?? ''),
+        implicitUsings: /^(enable|true)$/i.test(tag('ImplicitUsings') ?? ''),
+        rootNamespace: tag('RootNamespace'),
+        packages,
+        projectRefs,
+    };
+}
+
+/** Espacio de nombres raíz del proyecto (como lo calcula MSBuild). */
+export function rootNamespace(p: ProjectInfo): string {
+    return readCsproj(p.file).rootNamespace ?? toIdentifier(p.name, true);
+}
+
+/** Espacio de nombres para un archivo dentro de una subcarpeta del proyecto. */
+export function namespaceFor(p: ProjectInfo, folder: string): string {
+    const rel = path.relative(p.dir, folder);
+    const parts = rel && !rel.startsWith('..') ? rel.split(path.sep).map(s => toIdentifier(s, false)) : [];
+    return [rootNamespace(p), ...parts].join('.');
+}
+
+export function toIdentifier(name: string, dotted: boolean): string {
+    const segs = (dotted ? name.split('.') : [name]).map(s => {
+        let id = s.replace(/[^\p{L}\p{N}_]/gu, '_');
+        if (!id || /^\p{N}/u.test(id)) { id = '_' + id; }
+        return id;
+    });
+    return segs.join('.');
+}
+
+export function findProjectForPath(ws: Workspace, file: string): ProjectInfo | undefined {
+    const f = norm(file);
+    let best: ProjectInfo | undefined;
+    for (const p of ws.allProjects) {
+        const d = norm(p.dir) + path.sep;
+        if (f.startsWith(d) && (!best || p.dir.length > best.dir.length)) { best = p; }
+    }
+    return best;
+}
+
+export interface TargetInfo {
+    targetPath: string;
+    outputType: string;
+}
+
+const targetCache = new Map<string, { mtime: number; info: TargetInfo }>();
+
+/** Pregunta a MSBuild dónde queda el ensamblado de salida. */
+export async function getTargetInfo(p: ProjectInfo, configuration: string): Promise<TargetInfo> {
+    const key = `${norm(p.file)}|${configuration}`;
+    const mtime = fs.statSync(p.file).mtimeMs;
+    const cached = targetCache.get(key);
+    if (cached && cached.mtime === mtime) { return cached.info; }
+
+    const stdout = await new Promise<string>((resolve, reject) => {
+        execFile('dotnet', ['msbuild', p.file, '-nologo', '-getProperty:TargetPath', '-getProperty:OutputType', `-p:Configuration=${configuration}`],
+            { cwd: p.dir, windowsHide: true }, (err, out, errOut) => err ? reject(new Error(errOut || out || err.message)) : resolve(out));
+    });
+    const json = JSON.parse(stdout);
+    const info: TargetInfo = { targetPath: json.Properties.TargetPath, outputType: json.Properties.OutputType };
+    targetCache.set(key, { mtime, info });
+    return info;
+}
+
+/** True si X.cs es un formulario (tiene X.Designer.cs al lado). */
+export function isFormFile(file: string): boolean {
+    if (!/\.cs$/i.test(file) || /\.Designer\.cs$/i.test(file)) { return false; }
+    const designer = file.replace(/\.cs$/i, '.Designer.cs');
+    if (!fs.existsSync(designer)) { return false; }
+    try {
+        return /\bInitializeComponent\s*\(/.test(fs.readFileSync(designer, 'utf8'));
+    } catch { return false; }
+}
+
+export function designerFileFor(file: string): string {
+    return /\.Designer\.cs$/i.test(file) ? file : file.replace(/\.cs$/i, '.Designer.cs');
+}
+
+export function codeFileFor(file: string): string {
+    return file.replace(/\.Designer\.cs$/i, '.cs');
+}
