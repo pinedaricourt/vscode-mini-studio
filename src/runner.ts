@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { spawn, ChildProcess, execFile } from 'child_process';
-import { ProjectInfo, getTargetInfo, TargetInfo } from './projects';
+import { ProjectInfo, getTargetInfo, TargetInfo, isLegacyProject } from './projects';
 
 /** Lanza y detiene la app del proyecto de inicio (sin depurador o con el depurador de C#). */
 export class Runner {
@@ -106,7 +106,8 @@ export class Runner {
         const isConsole = /^exe$/i.test(info.outputType);
         await vscode.debug.startDebugging(folder, {
             name: `Mini Studio: ${p.name}`,
-            type: 'coreclr',
+            // .NET Framework (TargetPath .exe de un proyecto clásico) usa el depurador 'clr'
+            type: isLegacyProject(p.file) ? 'clr' : 'coreclr',
             request: 'launch',
             program: info.targetPath,
             cwd: p.dir,

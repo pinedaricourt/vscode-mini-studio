@@ -68,7 +68,7 @@ export class SolutionExplorer implements vscode.TreeDataProvider<Node> {
         const n = new Node('project', p.name, vscode.TreeItemCollapsibleState.Collapsed, p.dir, p);
         const data = readCsproj(p.file);
         const kind = data.outputType === 'WinExe' ? (data.useWindowsForms ? 'Windows Forms' : 'Windows') : data.outputType === 'Exe' ? 'Consola' : 'Biblioteca';
-        n.description = `${kind}${data.targetFramework ? ' · ' + data.targetFramework : ''}${isStartup ? ' · inicio' : ''}`;
+        n.description = `${kind}${data.targetFramework ? ' · ' + data.targetFramework : ''}${data.legacy ? ' (clásico)' : ''}${isStartup ? ' · inicio' : ''}`;
         n.tooltip = p.file;
         n.iconPath = new vscode.ThemeIcon(isStartup ? 'debug-start' : 'project', isStartup ? new vscode.ThemeColor('debugIcon.startForeground') : undefined);
         n.contextValue = isStartup ? 'project.startup' : 'project';
@@ -86,7 +86,9 @@ export class SolutionExplorer implements vscode.TreeDataProvider<Node> {
     private dependencyChildren(p: ProjectInfo): Node[] {
         const data = readCsproj(p.file);
         const out: Node[] = [];
-        const fw = new Node('package', data.useWindowsForms ? 'Microsoft.WindowsDesktop.App.WindowsForms' : 'Microsoft.NETCore.App', vscode.TreeItemCollapsibleState.None, undefined, p);
+        const fwName = data.legacy ? `.NET Framework ${data.targetFramework.replace(/^net(\d)(\d)(\d?)$/, (_, a, b, c) => [a, b, c].filter(Boolean).join('.'))}`
+            : data.useWindowsForms ? 'Microsoft.WindowsDesktop.App.WindowsForms' : 'Microsoft.NETCore.App';
+        const fw = new Node('package', fwName, vscode.TreeItemCollapsibleState.None, undefined, p);
         fw.contextValue = 'framework';
         fw.description = 'Marco';
         fw.iconPath = new vscode.ThemeIcon('library');

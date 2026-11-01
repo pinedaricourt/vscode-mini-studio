@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import { spawn } from 'child_process';
+import { needsVsMsbuild, findVsMsbuild } from './projects';
 
 export type BuildKind = 'build' | 'rebuild' | 'clean';
 
@@ -36,9 +37,26 @@ export class Builder {
         this.output.appendLine(`------ ${VERB[kind]} iniciado: ${name}, Configuración: ${configuration} ------`);
         status(`$(sync~spin) ${VERB[kind]}...`);
 
-        const args = [kind === 'rebuild' ? 'build' : kind, target, '-c', configuration, '-nologo',
-            `-v:${cfg.get<string>('build.verbosity', 'minimal')}`, '-clp:NoSummary'];
-        if (kind === 'rebuild') { args.push('--no-incremental'); }
+        // Los proyectos clásicos de .NET Framework (sin Sdk="...") no compilan bien con 'dotnet build'
+        // (p. ej. MSB4216 al generar los .resx): se usa el MSBuild de Visual Studio si está instalado.
+        const verbosity = `-v:${cfg.get<string>('build.verbosity', 'minimal')}`;
+        let cmd = 'dotnet';
+        let args: string[];
+        const vs = needsVsMsbuild(target) ? findVsMsbuild() : undefined;
+        if (vs) {
+            cmd = vs;
+            const t = kind === 'build' ? 'Build' : kind === 'rebuild' ? 'Rebuild' : 'Clean';
+            args = [target, `-t:${t}`, `-p:Configuration=${configuration}`, '-nologo', verbosity, '-clp:NoSummary', '-m'];
+            if (kind !== 'clean') { args.push('-restore'); }
+            this.output.appendLine(`(Proyecto de .NET Framework: se usa ${vs})`);
+        } else {
+            if (needsVsMsbuild(target)) {
+                this.output.appendLine('Aviso: este es un proyecto clásico de .NET Framework y no se encontró el MSBuild de Visual Studio/Build Tools; ' +
+                    "'dotnet build' puede fallar (MSB4216). Instala 'Build Tools para Visual Studio' o configura miniStudio.build.msbuildPath.");
+            }
+            args = [kind === 'rebuild' ? 'build' : kind, target, '-c', configuration, '-nologo', verbosity, '-clp:NoSummary'];
+            if (kind === 'rebuild') { args.push('--no-incremental'); }
+        }
 
         const byFile = new Map<string, vscode.Diagnostic[]>();
         const seen = new Set<string>();
@@ -58,7 +76,7 @@ export class Builder {
         };
 
         const code = await new Promise<number>(resolve => {
-            const child = spawn('dotnet', args, { cwd: path.dirname(target), windowsHide: true, env: { ...process.env, DOTNET_CLI_UI_LANGUAGE: process.env.DOTNET_CLI_UI_LANGUAGE ?? 'es' } });
+            const child = spawn(cmd, args, { cwd: path.dirname(target), windowsHide: true, env: { ...process.env, DOTNET_CLI_UI_LANGUAGE: process.env.DOTNET_CLI_UI_LANGUAGE ?? 'es' } });
             const pipe = (stream: NodeJS.ReadableStream) => {
                 let buf = '';
                 stream.on('data', (chunk: Buffer) => {
@@ -72,7 +90,7 @@ export class Builder {
             pipe(child.stdout);
             pipe(child.stderr);
             child.on('error', err => {
-                this.output.appendLine(`No se pudo ejecutar 'dotnet': ${err.message}. ¿Está instalado el SDK de .NET?`);
+                this.output.appendLine(`No se pudo ejecutar '${cmd}': ${err.message}. ¿Está instalado el SDK de .NET?`);
                 resolve(-1);
             });
             child.on('close', c => resolve(c ?? -1));

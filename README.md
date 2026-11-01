@@ -38,13 +38,17 @@ Extensión de VS Code que lo convierte en un **mini Visual Studio Community** pa
 - [SDK de .NET](https://dotnet.microsoft.com/download) 6 o superior (`dotnet` en el PATH).
 - Windows para ejecutar apps de Windows Forms.
 - Para depurar con F5: extensión **C#** (`ms-dotnettools.csharp`).
+- Para proyectos **clásicos de .NET Framework** (los `.csproj` de Visual Studio con `TargetFrameworkVersion`, p. ej. 4.7.2):
+  Visual Studio o *Build Tools para Visual Studio*. Mini Studio usa su `MSBuild.exe` automáticamente, porque
+  `dotnet build` no puede generar los `.resx` de esos proyectos (error MSB4216). También se depuran (tipo `clr`) y las
+  clases/formularios nuevos se registran en el `.csproj`.
 
 ## Instalación
 
 Descarga el `.vsix` de [Releases](https://github.com/pinedaricourt/vscode-mini-studio/releases) e instálalo:
 
 ```bash
-code --install-extension mini-studio-0.1.0.vsix
+code --install-extension mini-studio-0.2.0.vsix
 ```
 
 O desde el código fuente:
@@ -71,6 +75,7 @@ Pulsa F5 en VS Code con esta carpeta abierta para lanzar una ventana de prueba c
 |---|---|---|
 | `miniStudio.console.runIn` | `integratedTerminal` | `externalWindow` abre una consola aparte que espera una tecla al terminar |
 | `miniStudio.build.verbosity` | `minimal` | Detalle de `dotnet build` |
+| `miniStudio.build.msbuildPath` | (vacío) | MSBuild.exe para proyectos .NET Framework; vacío = se busca con vswhere |
 | `miniStudio.build.saveAllBeforeBuild` | `true` | Guardar todo antes de compilar |
 | `miniStudio.designer.gridSize` | `4` | Cuadrícula del diseñador (px) |
 

@@ -137,12 +137,39 @@ export async function addClass(p: ProjectInfo, folder: string, kind: 'class' | '
     const file = path.join(folder, name + ext);
     await writeAndOpen(file,
         `${usingsFor(p)}namespace ${ns}\n{\n    internal ${kind} ${name}\n    {\n    }\n}\n`);
+    registerInLegacyProject(p, [{ file }]);
+}
+
+/**
+ * Los proyectos clásicos de .NET Framework solo compilan los archivos listados en el .csproj,
+ * así que hay que agregarlos como <Compile Include="..."/> (los SDK los incluyen solos).
+ */
+function registerInLegacyProject(p: ProjectInfo, items: { file: string; subType?: string; dependentUpon?: string }[]) {
+    if (!readCsproj(p.file).legacy) { return; }
+    let text = fs.readFileSync(p.file, 'utf8');
+    const eol = text.includes('\r\n') ? '\r\n' : '\n';
+    const lines = items.map(i => {
+        const rel = path.relative(p.dir, i.file).replace(/\//g, '\\');
+        const inner = [i.subType && `<SubType>${i.subType}</SubType>`, i.dependentUpon && `<DependentUpon>${i.dependentUpon}</DependentUpon>`].filter(Boolean);
+        return inner.length
+            ? `    <Compile Include="${rel}">${eol}${inner.map(x => `      ${x}`).join(eol)}${eol}    </Compile>`
+            : `    <Compile Include="${rel}" />`;
+    }).join(eol);
+    const m = /<ItemGroup>\s*<Compile\s/i.exec(text);
+    if (m) {
+        const at = m.index + '<ItemGroup>'.length;
+        text = text.slice(0, at) + eol + lines + text.slice(at);
+    } else {
+        const at = text.lastIndexOf('</Project>');
+        text = text.slice(0, at) + `  <ItemGroup>${eol}${lines}${eol}  </ItemGroup>${eol}` + text.slice(at);
+    }
+    fs.writeFileSync(p.file, text, 'utf8');
 }
 
 export async function addForm(p: ProjectInfo, folder: string): Promise<string | undefined> {
     if (p.lang !== 'cs') { vscode.window.showWarningMessage('El diseñador de Mini Studio solo admite formularios en C#.'); return; }
     const data = readCsproj(p.file);
-    if (!data.useWindowsForms) {
+    if (!data.useWindowsForms && !data.legacy) {
         const pick = await vscode.window.showWarningMessage(
             `El proyecto ${p.name} no tiene <UseWindowsForms>. ¿Activarlo? (cambia también el TargetFramework a -windows si hace falta)`, 'Activar', 'Cancelar');
         if (pick !== 'Activar') { return; }
@@ -159,6 +186,7 @@ export async function addForm(p: ProjectInfo, folder: string): Promise<string | 
     fs.writeFileSync(code,
         `${usings}namespace ${ns}\n{\n    public partial class ${name} : Form\n    {\n        public ${name}()\n        {\n            InitializeComponent();\n        }\n    }\n}\n`, 'utf8');
     fs.writeFileSync(designer, emptyDesigner(ns, name), 'utf8');
+    registerInLegacyProject(p, [{ file: code, subType: 'Form' }, { file: designer, dependentUpon: `${name}.cs` }]);
     return code;
 }
 

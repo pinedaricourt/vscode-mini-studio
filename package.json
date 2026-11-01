@@ -2,7 +2,7 @@
   "name": "mini-studio",
   "displayName": "Mini Studio para .NET",
   "description": "Convierte VS Code en un mini Visual Studio Community: explorador de soluciones, compilar/ejecutar/depurar apps de consola y Windows Forms, plantillas y diseñador visual de formularios.",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "publisher": "pinedaricourt",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -159,6 +159,11 @@
           "enum": ["quiet", "minimal", "normal", "detailed"],
           "default": "minimal",
           "description": "Nivel de detalle de la salida de compilación."
+        },
+        "miniStudio.build.msbuildPath": {
+          "type": "string",
+          "default": "",
+          "description": "Ruta a MSBuild.exe para proyectos clásicos de .NET Framework. Vacío = se busca Visual Studio / Build Tools con vswhere."
         },
         "miniStudio.build.saveAllBeforeBuild": {
           "type": "boolean",

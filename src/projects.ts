@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { execFile } from 'child_process';
+import { execFile, execFileSync } from 'child_process';
 
 export interface ProjectInfo {
     name: string;
@@ -24,6 +24,7 @@ export interface Workspace {
 }
 
 export interface CsprojData {
+    legacy: boolean;               // proyecto clásico de .NET Framework (no SDK)
     outputType: string;            // Exe, WinExe, Library
     targetFramework: string;
     useWindowsForms: boolean;
@@ -98,15 +99,58 @@ export function readCsproj(file: string): CsprojData {
     const projectRefs: string[] = [];
     const refRe = /<ProjectReference\s+Include="([^"]+)"/gi;
     while ((m = refRe.exec(text))) { projectRefs.push(path.resolve(path.dirname(file), m[1].replace(/\\/g, path.sep))); }
+    const legacy = !isSdkStyle(text);
+    const fxVersion = tag('TargetFrameworkVersion');
     return {
+        legacy,
         outputType: tag('OutputType') ?? 'Library',
-        targetFramework: tag('TargetFramework') ?? tag('TargetFrameworks')?.split(';')[0] ?? '',
-        useWindowsForms: /^true$/i.test(tag('UseWindowsForms') ?? ''),
+        targetFramework: tag('TargetFramework') ?? tag('TargetFrameworks')?.split(';')[0]
+            ?? (fxVersion ? 'net' + fxVersion.replace(/^v/i, '').replace(/\./g, '') : ''),
+        useWindowsForms: /^true$/i.test(tag('UseWindowsForms') ?? '') || legacy && /<Reference\s+Include="System\.Windows\.Forms"/i.test(text),
         implicitUsings: /^(enable|true)$/i.test(tag('ImplicitUsings') ?? ''),
         rootNamespace: tag('RootNamespace'),
         packages,
         projectRefs,
     };
+}
+
+function isSdkStyle(text: string): boolean {
+    return /<Project[^>]*\sSdk\s*=/i.test(text) || /<Import\s+Project="Sdk\.props"/i.test(text) || /<Sdk\s+Name=/i.test(text);
+}
+
+/** True si el proyecto es del formato clásico de .NET Framework (sin Sdk="..."). */
+export function isLegacyProject(file: string): boolean {
+    try { return !isSdkStyle(fs.readFileSync(file, 'utf8')); } catch { return false; }
+}
+
+/** True si el .sln o .csproj necesita el MSBuild de Visual Studio (algún proyecto clásico). */
+export function needsVsMsbuild(target: string): boolean {
+    if (/\.sln$/i.test(target)) {
+        const dir = path.dirname(target);
+        return parseSlnProjects(target).some(rel => isLegacyProject(path.resolve(dir, rel)));
+    }
+    return isLegacyProject(target);
+}
+
+let vsMsbuild: string | null | undefined;
+
+/** Ruta a MSBuild.exe de Visual Studio / Build Tools (vía vswhere), o undefined si no hay. */
+export function findVsMsbuild(): string | undefined {
+    if (vsMsbuild !== undefined) { return vsMsbuild ?? undefined; }
+    vsMsbuild = null;
+    const custom = vscode.workspace.getConfiguration('miniStudio').get<string>('build.msbuildPath');
+    if (custom && fs.existsSync(custom)) { return vsMsbuild = custom; }
+    const vswhere = path.join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Microsoft Visual Studio', 'Installer', 'vswhere.exe');
+    if (fs.existsSync(vswhere)) {
+        try {
+            const out = execFileSync(vswhere,
+                ['-latest', '-products', '*', '-requires', 'Microsoft.Component.MSBuild', '-find', 'MSBuild\\**\\Bin\\MSBuild.exe'],
+                { encoding: 'utf8', windowsHide: true });
+            const first = out.split(/\r?\n/).map(s => s.trim()).find(s => s && fs.existsSync(s));
+            if (first) { vsMsbuild = first; }
+        } catch { /* sin Visual Studio */ }
+    }
+    return vsMsbuild ?? undefined;
 }
 
 /** Espacio de nombres raíz del proyecto (como lo calcula MSBuild). */
@@ -154,8 +198,10 @@ export async function getTargetInfo(p: ProjectInfo, configuration: string): Prom
     const cached = targetCache.get(key);
     if (cached && cached.mtime === mtime) { return cached.info; }
 
+    const vs = isLegacyProject(p.file) ? findVsMsbuild() : undefined;
+    const [cmd, pre] = vs ? [vs, []] : ['dotnet', ['msbuild']];
     const stdout = await new Promise<string>((resolve, reject) => {
-        execFile('dotnet', ['msbuild', p.file, '-nologo', '-getProperty:TargetPath', '-getProperty:OutputType', `-p:Configuration=${configuration}`],
+        execFile(cmd, [...pre, p.file, '-nologo', '-getProperty:TargetPath', '-getProperty:OutputType', `-p:Configuration=${configuration}`],
             { cwd: p.dir, windowsHide: true }, (err, out, errOut) => err ? reject(new Error(errOut || out || err.message)) : resolve(out));
     });
     const json = JSON.parse(stdout);
