@@ -48,7 +48,7 @@ Extensión de VS Code que lo convierte en un **mini Visual Studio Community** pa
 Descarga el `.vsix` de [Releases](https://github.com/pinedaricourt/vscode-mini-studio/releases) e instálalo:
 
 ```bash
-code --install-extension mini-studio-0.2.0.vsix
+code --install-extension mini-studio-0.2.1.vsix
 ```
 
 O desde el código fuente:

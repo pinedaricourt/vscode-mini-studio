@@ -210,6 +210,38 @@ export async function getTargetInfo(p: ProjectInfo, configuration: string): Prom
     return info;
 }
 
+/**
+ * Lee la cabecera CLR del ensamblado y dice si se ejecutará como proceso de 32 bits
+ * (flags 32BITREQUIRED o 32BITPREFERRED, o PE32 sin ILONLY). undefined si no se puede leer.
+ */
+export function runsAs32Bit(file: string): boolean | undefined {
+    let b: Buffer;
+    try { b = fs.readFileSync(file); } catch { return undefined; }
+    try {
+        const pe = b.readUInt32LE(0x3c);
+        if (b.readUInt32LE(pe) !== 0x4550) { return undefined; }
+        const sections = b.readUInt16LE(pe + 6);
+        const optSize = b.readUInt16LE(pe + 20);
+        const opt = pe + 24;
+        const pe32plus = b.readUInt16LE(opt) === 0x20b;
+        if (pe32plus) { return false; }
+        const cliDir = opt + 96 + 14 * 8;
+        const cliRva = b.readUInt32LE(cliDir);
+        if (!cliRva) { return true; }
+        const secTable = opt + optSize;
+        for (let i = 0; i < sections; i++) {
+            const s = secTable + i * 40;
+            const va = b.readUInt32LE(s + 12), size = b.readUInt32LE(s + 8), raw = b.readUInt32LE(s + 20);
+            if (cliRva >= va && cliRva < va + size) {
+                const flags = b.readUInt32LE(raw + (cliRva - va) + 16);
+                const ilOnly = (flags & 0x1) !== 0, req32 = (flags & 0x2) !== 0, pref32 = (flags & 0x20000) !== 0;
+                return req32 || pref32 || !ilOnly;
+            }
+        }
+    } catch { /* cabecera inesperada */ }
+    return undefined;
+}
+
 /** True si X.cs es un formulario (tiene X.Designer.cs al lado). */
 export function isFormFile(file: string): boolean {
     if (!/\.cs$/i.test(file) || /\.Designer\.cs$/i.test(file)) { return false; }

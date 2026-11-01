@@ -2,7 +2,7 @@
   "name": "mini-studio",
   "displayName": "Mini Studio para .NET",
   "description": "Convierte VS Code en un mini Visual Studio Community: explorador de soluciones, compilar/ejecutar/depurar apps de consola y Windows Forms, plantillas y diseñador visual de formularios.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "publisher": "pinedaricourt",
   "license": "MIT",
   "icon": "media/icon.png",

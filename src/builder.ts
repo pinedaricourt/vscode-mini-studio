@@ -19,8 +19,8 @@ export class Builder {
 
     get isBusy() { return this.busy; }
 
-    /** Compila un .sln o .csproj. Devuelve true si no hubo errores. */
-    async run(kind: BuildKind, target: string, configuration: string, status: (text: string | undefined) => void): Promise<boolean> {
+    /** Compila un .sln o .csproj. Devuelve true si no hubo errores. 'props' son propiedades MSBuild extra (Nombre=valor). */
+    async run(kind: BuildKind, target: string, configuration: string, status: (text: string | undefined) => void, props: string[] = []): Promise<boolean> {
         if (this.busy) {
             vscode.window.showWarningMessage('Ya hay una compilación en curso.');
             return false;
@@ -57,6 +57,7 @@ export class Builder {
             args = [kind === 'rebuild' ? 'build' : kind, target, '-c', configuration, '-nologo', verbosity, '-clp:NoSummary'];
             if (kind === 'rebuild') { args.push('--no-incremental'); }
         }
+        args.push(...props.map(p => `-p:${p}`));
 
         const byFile = new Map<string, vscode.Diagnostic[]>();
         const seen = new Set<string>();

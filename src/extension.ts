@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { discover, Workspace, ProjectInfo, readCsproj, findProjectForPath, isFormFile, codeFileFor, norm } from './projects';
+import { discover, Workspace, ProjectInfo, readCsproj, findProjectForPath, isFormFile, codeFileFor, norm, isLegacyProject, getTargetInfo, runsAs32Bit } from './projects';
 import { SolutionExplorer, Node } from './solutionExplorer';
 import { Builder, BuildKind } from './builder';
 import { Runner } from './runner';
@@ -117,9 +117,9 @@ export function activate(context: vscode.ExtensionContext) {
         return startupProject()?.file ?? ws.allProjects[0]?.file;
     }
 
-    async function build(kind: BuildKind, target: string | undefined) {
+    async function build(kind: BuildKind, target: string | undefined, props: string[] = []) {
         if (!target) { vscode.window.showWarningMessage('No hay ninguna solución ni proyecto para compilar.'); return false; }
-        return builder.run(kind, target, configuration(), t => updateStatus(t));
+        return builder.run(kind, target, configuration(), t => updateStatus(t), props);
     }
 
     async function ensureStartup(): Promise<ProjectInfo | undefined> {
@@ -138,7 +138,26 @@ export function activate(context: vscode.ExtensionContext) {
         const p = await ensureStartup();
         if (!p) { return; }
         if (builder.isBusy) { return; }
-        if (!await build('build', p.file)) { return; }
+        // El depurador de la extensión C# solo depura procesos de .NET Framework de 64 bits, y los
+        // proyectos clásicos traen "Preferir 32 bits" activado: para F5 se compila sin esa preferencia.
+        const props: string[] = [];
+        if (debug && isLegacyProject(p.file)) {
+            if (/<PlatformTarget>\s*x86\s*<\/PlatformTarget>/i.test(fs.readFileSync(p.file, 'utf8'))) {
+                const pick = await vscode.window.showWarningMessage(
+                    `${p.name} está configurado como x86 (32 bits) y el depurador de VS Code solo depura .NET Framework de 64 bits. ` +
+                    'Cambia el destino de plataforma a AnyCPU o x64, o ejecútalo sin depurar.', 'Iniciar sin depurar');
+                if (pick) { await start(false); }
+                return;
+            }
+            props.push('Prefer32Bit=false');
+        }
+        // Cambiar Prefer32Bit no invalida la compilación incremental: si el .exe actual es de 32 bits, se recompila.
+        let kind: BuildKind = 'build';
+        if (props.length) {
+            const prev = await getTargetInfo(p, configuration()).catch(() => undefined);
+            if (prev && runsAs32Bit(prev.targetPath)) { kind = 'rebuild'; }
+        }
+        if (!await build(kind, p.file, props)) { return; }
         const info = await runner.resolveTarget(p, configuration());
         if (!info) { return; }
         if (debug) { await runner.startDebugging(p, info, vscode.workspace.getWorkspaceFolder(vscode.Uri.file(p.file))); }
