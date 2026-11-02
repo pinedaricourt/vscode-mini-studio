@@ -212,9 +212,141 @@
         surface.innerHTML = '';
         renderChildren(null, surface);
         renderTray();
-        renderSelection();
+        document.body.classList.toggle('preview', preview);
+        $('btnPreview').textContent = preview ? '■ Salir del simulador' : '▶ Simular';
+        if (preview) {
+            overlay.innerHTML = '';
+            $('formWin').classList.remove('selected');
+            makeInteractive();
+        } else {
+            renderSelection();
+        }
         renderProps();
         renderCombo();
+    }
+
+    // ------------------------------------------------------------------ simulador (vista previa interactiva)
+    // Los controles responden (escribir, marcar, elegir...), pero el código C# no se ejecuta:
+    // los eventos con controlador se anuncian en una notificación.
+    let preview = false;
+    let pendingPreview = false;
+
+    function setPreview(on) {
+        preview = on;
+        if (on) { sel = FORM; }
+        render();
+    }
+
+    function announce(c, ev) {
+        const owner = c || form;
+        const h = owner.events[ev];
+        const t = $('toast');
+        t.textContent = h
+            ? `${c ? c.name : form.className}.${ev} → ${h}()  (el código C# se ejecuta en la app real)`
+            : `${c ? c.name : form.className}.${ev} (sin controlador; doble clic en el diseñador para crearlo)`;
+        t.classList.add('show');
+        clearTimeout(announce.timer);
+        announce.timer = setTimeout(() => t.classList.remove('show'), 2600);
+    }
+
+    function makeInteractive() {
+        const field = (tag, attrs) => {
+            const e = document.createElement(tag);
+            Object.assign(e, attrs);
+            e.className = 'sim';
+            return e;
+        };
+        for (const el of surface.querySelectorAll('.ctl')) {
+            const c = getCtl(el.dataset.name);
+            const t = short(c.type);
+            const p = c.props;
+            const text = decodeStr(p.Text) ?? '';
+            el.style.cursor = 'default';
+            if (!isTrue(p.Visible, true)) { el.style.visibility = 'hidden'; continue; }
+            if (!isTrue(p.Enabled, true)) { continue; }
+            switch (t) {
+                case 'Button':
+                    el.addEventListener('mousedown', () => el.classList.add('pressed'));
+                    el.addEventListener('mouseup', () => el.classList.remove('pressed'));
+                    el.addEventListener('click', () => announce(c, 'Click'));
+                    break;
+                case 'LinkLabel':
+                    el.style.cursor = 'pointer';
+                    el.addEventListener('click', () => announce(c, c.events.LinkClicked ? 'LinkClicked' : 'Click'));
+                    break;
+                case 'TextBox': case 'MaskedTextBox': case 'RichTextBox': {
+                    const multi = t === 'RichTextBox' || isTrue(p.Multiline, false);
+                    const pwd = !!p.PasswordChar || isTrue(p.UseSystemPasswordChar, false);
+                    const inp = multi ? field('textarea', { value: text }) : field('input', { value: text, type: pwd ? 'password' : 'text' });
+                    inp.readOnly = isTrue(p.ReadOnly, false);
+                    inp.style.textAlign = (/HorizontalAlignment\.(Right|Center)/.exec(p.TextAlign || '') || [, 'left'])[1].toLowerCase();
+                    inp.addEventListener('input', () => announce(c, 'TextChanged'));
+                    el.innerHTML = '';
+                    el.appendChild(inp);
+                    break;
+                }
+                case 'CheckBox': {
+                    let on = isTrue(p.Checked, false);
+                    el.addEventListener('click', () => {
+                        on = !on;
+                        el.querySelector('.box').textContent = on ? '✔' : '';
+                        announce(c, 'CheckedChanged');
+                    });
+                    break;
+                }
+                case 'RadioButton':
+                    el.addEventListener('click', () => {
+                        for (const o of visibleControls().filter(o => o.parent === c.parent && short(o.type) === 'RadioButton')) {
+                            const r = elOf(o.name).querySelector('.radio');
+                            if (r) { r.classList.toggle('on', o.name === c.name); }
+                        }
+                        announce(c, 'CheckedChanged');
+                    });
+                    break;
+                case 'ComboBox': {
+                    const items = itemsOf(c);
+                    const s = field('select', {});
+                    s.innerHTML = (items.length ? items : [text]).map(x => `<option>${esc(x)}</option>`).join('');
+                    s.addEventListener('change', () => announce(c, 'SelectedIndexChanged'));
+                    el.innerHTML = '';
+                    el.appendChild(s);
+                    break;
+                }
+                case 'ListBox': case 'CheckedListBox': {
+                    const s = field('select', { size: 2 });
+                    s.innerHTML = itemsOf(c).map(x => `<option>${esc(x)}</option>`).join('');
+                    s.addEventListener('change', () => announce(c, 'SelectedIndexChanged'));
+                    el.innerHTML = '';
+                    el.appendChild(s);
+                    break;
+                }
+                case 'NumericUpDown': {
+                    const inp = field('input', { type: 'number', value: '0' });
+                    inp.addEventListener('input', () => announce(c, 'ValueChanged'));
+                    el.innerHTML = '';
+                    el.appendChild(inp);
+                    break;
+                }
+                case 'DateTimePicker': {
+                    const inp = field('input', { type: 'date' });
+                    inp.valueAsDate = new Date();
+                    inp.addEventListener('change', () => announce(c, 'ValueChanged'));
+                    el.innerHTML = '';
+                    el.appendChild(inp);
+                    break;
+                }
+                case 'TrackBar': {
+                    const inp = field('input', { type: 'range', min: p.Minimum || 0, max: p.Maximum || 10, value: p.Value || 0 });
+                    inp.addEventListener('input', () => announce(c, 'Scroll'));
+                    el.innerHTML = '';
+                    el.appendChild(inp);
+                    break;
+                }
+                default:
+                    if (c.events.Click) { el.addEventListener('click', () => announce(c, 'Click')); }
+            }
+        }
+        if (form.events.Load) { announce(null, 'Load'); }
     }
 
     function renderChildren(parent, host) {
@@ -260,6 +392,8 @@
                 const pwd = p.PasswordChar || (isTrue(p.UseSystemPasswordChar, false) ? "'●'" : '');
                 el.textContent = pwd ? (pwd.replace(/'/g, '')[0] || '*').repeat(text.length) : text;
                 if (isTrue(p.Multiline, false)) { el.classList.add('multi'); }
+                if (/HorizontalAlignment\.Right/.test(p.TextAlign || '')) { el.style.justifyContent = 'flex-end'; }
+                if (/HorizontalAlignment\.Center/.test(p.TextAlign || '')) { el.style.justifyContent = 'center'; }
                 break;
             }
             case 'CheckBox':
@@ -372,6 +506,7 @@
     const status = t => { $('status').textContent = t || ''; };
 
     surface.addEventListener('mousedown', e => {
+        if (preview) { return; }
         if (e.button !== 0) { return; }
         const el = e.target.closest('.ctl');
         if (!el) { select(FORM); return; }
@@ -515,6 +650,7 @@
     });
 
     surface.addEventListener('dblclick', e => {
+        if (preview) { return; }
         const el = e.target.closest('.ctl');
         if (!el) { defaultEvent(null); return; }
         defaultEvent(getCtl(el.dataset.name));
@@ -959,6 +1095,7 @@
 
     // ------------------------------------------------------------------ teclado y barra
     document.addEventListener('keydown', e => {
+        if (preview) { if (e.key === 'Escape') { setPreview(false); } return; }
         const inField = /INPUT|TEXTAREA|SELECT/.test(document.activeElement && document.activeElement.tagName);
         if (e.key === 'F7') { e.preventDefault(); vscode.postMessage({ type: 'viewCode' }); return; }
         if (inField) { return; }
@@ -987,6 +1124,7 @@
     $('btnFront').addEventListener('click', () => zorder(true));
     $('btnBack').addEventListener('click', () => zorder(false));
     $('btnCode').addEventListener('click', () => vscode.postMessage({ type: 'viewCode' }));
+    $('btnPreview').addEventListener('click', () => setPreview(!preview));
     $('selCombo').addEventListener('change', e => select(e.target.value));
     $('tabs').addEventListener('click', e => {
         const b = e.target.closest('button');
@@ -997,11 +1135,13 @@
 
     window.addEventListener('message', e => {
         const m = e.data;
+        if (m.type === 'preview') { if (form) { setPreview(m.on); } else { pendingPreview = m.on; } return; }
         if (m.type === 'load') {
             form = m.form;
             grid = m.gridSize || 4;
             if (sel !== FORM && !getCtl(sel)) { sel = FORM; }
             render();
+            if (pendingPreview) { pendingPreview = false; setPreview(true); }
         }
     });
 

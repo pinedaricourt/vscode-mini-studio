@@ -3,6 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import { execFile } from 'child_process';
 import { Workspace, ProjectInfo, namespaceFor, readCsproj, toIdentifier } from './projects';
+import { applySample } from './samples';
 
 export function exec(cmd: string, args: string[], cwd: string): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -11,90 +12,61 @@ export function exec(cmd: string, args: string[], cwd: string): Promise<string> 
     });
 }
 
-interface ProjectTemplate { label: string; detail: string; id: string; lang: 'C#' | 'VB' }
-
-const PROJECT_TEMPLATES: ProjectTemplate[] = [
-    { label: '$(terminal) Aplicación de consola (C#)', detail: 'Una app que se ejecuta en la línea de comandos.', id: 'console', lang: 'C#' },
-    { label: '$(window) Aplicación de Windows Forms (C#)', detail: 'Una app de escritorio con formularios y diseñador visual.', id: 'winforms', lang: 'C#' },
-    { label: '$(library) Biblioteca de clases (C#)', detail: 'Un proyecto .dll para compartir código entre proyectos.', id: 'classlib', lang: 'C#' },
-    { label: '$(terminal) Aplicación de consola (Visual Basic)', detail: 'App de consola en VB.NET.', id: 'console', lang: 'VB' },
-    { label: '$(window) Aplicación de Windows Forms (Visual Basic)', detail: 'App de escritorio en VB.NET (sin diseñador de Mini Studio).', id: 'winforms', lang: 'VB' },
-];
-
 const NAME_RE = /^[\p{L}_][\p{L}\p{N}_.\-]*$/u;
 
-/** Asistente "Crear un proyecto" estilo Visual Studio. Devuelve el .csproj creado. */
-export async function newProject(ws: Workspace, output: vscode.OutputChannel): Promise<string | undefined> {
-    const tpl = await vscode.window.showQuickPick(PROJECT_TEMPLATES, { title: 'Crear un proyecto nuevo', placeHolder: 'Elige una plantilla' });
-    if (!tpl) { return; }
+export interface CreateOptions {
+    template: 'console' | 'winforms' | 'classlib';
+    lang: 'C#' | 'VB';
+    name: string;
+    solution?: string;       // agregar a esta .sln
+    location?: string;       // o crear <location>/<name>/<name>.sln
+    classicMain?: boolean;   // consola C#: Program con Main clásico
+    framework?: string;      // net8.0, net9.0... (vacío = el del SDK)
+    sample?: string;         // id de un ejemplo de samples.ts
+}
 
-    let topLevel = true;
-    if (tpl.id === 'console' && tpl.lang === 'C#') {
-        const style = await vscode.window.showQuickPick([
-            { label: 'Método Main clásico', detail: 'class Program { static void Main(string[] args) ... } — como en los libros y en clase', classic: true },
-            { label: 'Instrucciones de nivel superior', detail: 'Program.cs sin clase ni Main (estilo moderno)', classic: false },
-        ], { title: 'Estilo de Program.cs' });
-        if (!style) { return; }
-        topLevel = !style.classic;
-    }
-
-    const name = await vscode.window.showInputBox({
-        title: 'Nombre del proyecto', value: tpl.id === 'winforms' ? 'WinFormsApp1' : tpl.id === 'console' ? 'ConsoleApp1' : 'ClassLibrary1',
-        validateInput: v => NAME_RE.test(v) ? undefined : 'Nombre no válido (usa letras, números, _ . -).',
-    });
-    if (!name) { return; }
-
-    // ¿Agregar a la solución abierta o crear una nueva?
-    let slnFile: string | undefined;
+/** Crea el proyecto (y la solución si hace falta) como Visual Studio. Devuelve el .csproj/.vbproj. */
+export async function createProject(o: CreateOptions, output: vscode.OutputChannel): Promise<string> {
+    if (!NAME_RE.test(o.name)) { throw new Error(`'${o.name}' no es un nombre de proyecto válido.`); }
+    let slnFile: string;
     let projectDir: string;
-    const existing = ws.solutions[0];
-    const root = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath;
-    let addToExisting = false;
-    if (existing) {
-        const pick = await vscode.window.showQuickPick([
-            { label: `Agregar a la solución '${existing.name}'`, add: true },
-            { label: 'Crear una solución nueva', add: false },
-        ], { title: 'Solución' });
-        if (!pick) { return; }
-        addToExisting = pick.add;
-    }
-    if (addToExisting) {
-        slnFile = existing.file;
-        projectDir = path.join(existing.dir, name);
+    if (o.solution) {
+        slnFile = o.solution;
+        projectDir = path.join(path.dirname(o.solution), o.name);
     } else {
-        const loc = await vscode.window.showOpenDialog({
-            title: 'Ubicación', canSelectFolders: true, canSelectFiles: false, openLabel: 'Crear aquí',
-            defaultUri: root ? vscode.Uri.file(root) : undefined,
-        });
-        if (!loc?.[0]) { return; }
-        const solutionDir = path.join(loc[0].fsPath, name);
+        if (!o.location) { throw new Error('Falta la ubicación del proyecto.'); }
+        const solutionDir = path.join(o.location, o.name);
         if (fs.existsSync(solutionDir) && fs.readdirSync(solutionDir).length) {
-            vscode.window.showErrorMessage(`La carpeta ${solutionDir} ya existe y no está vacía.`);
-            return;
+            throw new Error(`La carpeta ${solutionDir} ya existe y no está vacía.`);
         }
         fs.mkdirSync(solutionDir, { recursive: true });
-        projectDir = path.join(solutionDir, name);
-        slnFile = path.join(solutionDir, `${name}.sln`);
+        projectDir = path.join(solutionDir, o.name);
+        slnFile = path.join(solutionDir, `${o.name}.sln`);
     }
-    if (fs.existsSync(projectDir)) {
-        vscode.window.showErrorMessage(`Ya existe la carpeta ${projectDir}.`);
-        return;
+    if (fs.existsSync(projectDir)) { throw new Error(`Ya existe la carpeta ${projectDir}.`); }
+
+    const args = ['new', o.template, '-n', o.name, '-o', projectDir, '-lang', o.lang];
+    if (o.template === 'console' && o.lang === 'C#' && o.classicMain) { args.push('--use-program-main'); }
+    if (o.framework) { args.push('-f', o.framework); }
+    const projFile = path.join(projectDir, o.name + (o.lang === 'VB' ? '.vbproj' : '.csproj'));
+
+    output.appendLine(`> dotnet ${args.join(' ')}`);
+    output.appendLine(await exec('dotnet', args, path.dirname(projectDir)));
+    if (!fs.existsSync(slnFile)) {
+        output.appendLine(await exec('dotnet', ['new', 'sln', '-n', path.basename(slnFile, '.sln'), '-o', path.dirname(slnFile)], path.dirname(slnFile)));
     }
-
-    const args = ['new', tpl.id, '-n', name, '-o', projectDir, '-lang', tpl.lang];
-    if (tpl.id === 'console' && tpl.lang === 'C#' && !topLevel) { args.push('--use-program-main'); }
-    const projExt = tpl.lang === 'VB' ? '.vbproj' : '.csproj';
-    const projFile = path.join(projectDir, name + projExt);
-
-    await vscode.window.withProgress({ location: vscode.ProgressLocation.Notification, title: `Creando ${name}...` }, async () => {
-        output.appendLine(`> dotnet ${args.join(' ')}`);
-        output.appendLine(await exec('dotnet', args, path.dirname(projectDir)));
-        if (!fs.existsSync(slnFile!)) {
-            output.appendLine(await exec('dotnet', ['new', 'sln', '-n', name, '-o', path.dirname(slnFile!)], path.dirname(slnFile!)));
-        }
-        output.appendLine(await exec('dotnet', ['sln', slnFile!, 'add', projFile], path.dirname(slnFile!)));
-    });
+    output.appendLine(await exec('dotnet', ['sln', slnFile, 'add', projFile], path.dirname(slnFile)));
+    if (o.sample) { applySample(o.sample, projectDir, toIdentifier(o.name, true)); }
     return projFile;
+}
+
+/** Versiones de .NET instaladas (net8.0, net9.0...), de la más nueva a la más vieja. */
+export async function installedFrameworks(): Promise<string[]> {
+    try {
+        const out = await exec('dotnet', ['--list-sdks'], process.cwd());
+        const majors = [...new Set(out.split(/\r?\n/).map(l => /^(\d+)\./.exec(l)?.[1]).filter(Boolean) as string[])];
+        return majors.map(Number).filter(m => m >= 5).sort((a, b) => b - a).map(m => `net${m}.0`);
+    } catch { return []; }
 }
 
 async function askItemName(title: string, def: string, ext: string, folder: string): Promise<string | undefined> {

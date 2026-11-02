@@ -1,12 +1,13 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { discover, Workspace, ProjectInfo, readCsproj, findProjectForPath, isFormFile, codeFileFor, norm, isLegacyProject, getTargetInfo, runsAs32Bit } from './projects';
+import { discover, Workspace, ProjectInfo, readCsproj, findProjectForPath, isFormFile, codeFileFor, norm, isLegacyProject, getTargetInfo, runsAs32Bit, wineBuildProps } from './projects';
 import { SolutionExplorer, Node } from './solutionExplorer';
 import { Builder, BuildKind } from './builder';
 import { Runner } from './runner';
 import * as templates from './templates';
 import { DesignerPanel } from './designer/designerPanel';
+import { StartPage } from './startPage';
 import { allowCode, registerOpenByDefault } from './designer/openByDefault';
 
 const CONFIGS = ['Debug', 'Release'];
@@ -76,6 +77,7 @@ export function activate(context: vscode.ExtensionContext) {
         explorer.setWorkspace(ws, startupFile());
         updateStatus();
         updateFormContext();
+        if (ws.solutions.length) { StartPage.remember(context, ws.solutions[0].file); }
     }
     const scheduleRefresh = (uri?: vscode.Uri) => {
         if (uri && /[\\/](bin|obj|\.git|\.vs)[\\/]/i.test(uri.fsPath)) { return; }
@@ -142,8 +144,9 @@ export function activate(context: vscode.ExtensionContext) {
         if (builder.isBusy) { return; }
         // El depurador de la extensión C# solo depura procesos de .NET Framework de 64 bits, y los
         // proyectos clásicos traen "Preferir 32 bits" activado: para F5 se compila sin esa preferencia.
-        const props: string[] = [];
-        if (debug && isLegacyProject(p.file)) {
+        // Fuera de Windows, WinForms se compila autocontenida para win-x64 y se corre con Wine
+        const props: string[] = wineBuildProps(p);
+        if (debug && isLegacyProject(p.file) && process.platform === 'win32') {
             if (/<PlatformTarget>\s*x86\s*<\/PlatformTarget>/i.test(fs.readFileSync(p.file, 'utf8'))) {
                 const pick = await vscode.window.showWarningMessage(
                     `${p.name} está configurado como x86 (32 bits) y el depurador de VS Code solo depura .NET Framework de 64 bits. ` +
@@ -155,12 +158,12 @@ export function activate(context: vscode.ExtensionContext) {
         }
         // Cambiar Prefer32Bit no invalida la compilación incremental: si el .exe actual es de 32 bits, se recompila.
         let kind: BuildKind = 'build';
-        if (props.length) {
-            const prev = await getTargetInfo(p, configuration()).catch(() => undefined);
+        if (props.includes('Prefer32Bit=false')) {
+            const prev = await getTargetInfo(p, configuration(), props).catch(() => undefined);
             if (prev && runsAs32Bit(prev.targetPath)) { kind = 'rebuild'; }
         }
         if (!await build(kind, p.file, props)) { return; }
-        const info = await runner.resolveTarget(p, configuration());
+        const info = await runner.resolveTarget(p, configuration(), props);
         if (!info) { return; }
         if (debug) { await runner.startDebugging(p, info, vscode.workspace.getWorkspaceFolder(vscode.Uri.file(p.file))); }
         else { await runner.startWithoutDebugging(p, info); }
@@ -174,22 +177,31 @@ export function activate(context: vscode.ExtensionContext) {
     // ------------------------------------------------------------- comandos
     reg('miniStudio.refresh', refresh);
 
-    reg('miniStudio.newProject', async () => {
-        const proj = await templates.newProject(ws, general);
-        if (!proj) { return; }
-        const inWorkspace = vscode.workspace.getWorkspaceFolder(vscode.Uri.file(proj));
-        if (!inWorkspace) {
-            const sln = path.dirname(path.dirname(proj));
-            const pick = await vscode.window.showInformationMessage(`Proyecto creado en ${sln}. ¿Abrir la carpeta de la solución?`, 'Abrir', 'Abrir en ventana nueva');
-            if (pick) { await vscode.commands.executeCommand('vscode.openFolder', vscode.Uri.file(sln), { forceNewWindow: pick !== 'Abrir' }); }
-            return;
-        }
+    const showStart = () => StartPage.show(context, general, () => ws.solutions[0]?.file);
+    reg('miniStudio.newProject', showStart);
+    reg('miniStudio.startPage', showStart);
+
+    /** Abre el archivo principal de un proyecto recién creado: el diseñador si es un formulario. */
+    reg('miniStudio.openMainFile', async (file: string) => {
         await refresh();
-        const created = ws.allProjects.find(p => norm(p.file) === norm(proj));
-        if (created && /exe/i.test(readCsproj(proj).outputType)) { await context.workspaceState.update('startupProject', proj); await refresh(); }
-        const main = ['Form1.cs', 'Program.cs', 'Program.vb', 'Class1.cs'].map(f => path.join(path.dirname(proj), f)).find(f => fs.existsSync(f));
-        if (main && /Form1\.cs$/.test(main)) { DesignerPanel.open(context, main); }
-        else if (main) { await vscode.window.showTextDocument(vscode.Uri.file(main)); }
+        const proj = findProjectForPath(ws, file);
+        if (proj && /exe/i.test(readCsproj(proj.file).outputType)) { await context.workspaceState.update('startupProject', proj.file); await refresh(); }
+        if (isFormFile(file)) { DesignerPanel.open(context, file); }
+        else { allowCode(file); await vscode.window.showTextDocument(vscode.Uri.file(file)); }
+    });
+
+    /** Simulador: abre el formulario principal del proyecto (o el indicado) en modo vista previa. */
+    reg('miniStudio.previewForm', async (arg?: string | Node | vscode.Uri) => {
+        let file = typeof arg === 'string' ? arg : arg instanceof vscode.Uri ? arg.fsPath : arg?.fsPath ?? arg?.project?.file;
+        file = file ?? DesignerPanel.activeCodeFile() ?? vscode.window.activeTextEditor?.document.uri.fsPath ?? startupProject()?.file;
+        if (!file) { return; }
+        if (/\.(cs|vb)proj$/i.test(file) || fs.existsSync(file) && fs.statSync(file).isDirectory()) {
+            const proj = /\.(cs|vb)proj$/i.test(file) ? file : findProjectForPath(ws, path.join(file, 'x'))?.file;
+            file = proj ? mainFormOf(path.dirname(proj)) : undefined;
+            if (!file) { vscode.window.showWarningMessage('Este proyecto no tiene formularios que simular.'); return; }
+        }
+        if (!isFormFile(codeFileFor(file))) { vscode.window.showWarningMessage('El simulador funciona con formularios de Windows Forms (Form1.cs).'); return; }
+        DesignerPanel.open(context, codeFileFor(file), true);
     });
 
     reg('miniStudio.buildSolution', () => build('build', buildTarget()));
@@ -284,7 +296,32 @@ export function activate(context: vscode.ExtensionContext) {
         await refresh();
     });
 
-    refresh();
+    refresh().then(async () => {
+        // proyecto recién creado desde la página de inicio: abrir su archivo principal
+        const pending = StartPage.takePendingFile(context);
+        if (pending && fs.existsSync(pending)) { await vscode.commands.executeCommand('miniStudio.openMainFile', pending); }
+    });
+    // ventana vacía: mostrar la página de inicio, como la ventana de inicio de Visual Studio
+    if (!vscode.workspace.workspaceFolders?.length && vscode.workspace.getConfiguration('miniStudio').get<boolean>('startPage.showOnStartup', true)) {
+        showStart();
+    }
+}
+
+/** Formulario principal: el de Application.Run(new X()) en Program.cs, o el primero que haya. */
+function mainFormOf(dir: string): string | undefined {
+    const program = ['Program.cs'].map(f => path.join(dir, f)).find(f => fs.existsSync(f));
+    const m = program ? /Application\.Run\(\s*new\s+([\w.]+)\s*\(/.exec(fs.readFileSync(program, 'utf8')) : null;
+    const forms: string[] = [];
+    const walk = (d: string) => {
+        for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+            const full = path.join(d, e.name);
+            if (e.isDirectory()) { if (!/^(bin|obj|\..*)$/i.test(e.name)) { walk(full); } }
+            else if (isFormFile(full)) { forms.push(full); }
+        }
+    };
+    walk(dir);
+    const wanted = m?.[1].split('.').pop();
+    return forms.find(f => path.basename(f, '.cs') === wanted) ?? forms[0];
 }
 
 export function deactivate() { /* nada */ }

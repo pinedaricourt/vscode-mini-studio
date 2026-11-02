@@ -1,0 +1,60 @@
+* { box-sizing: border-box; }
+body {
+    margin: 0; padding: 0;
+    font-family: var(--vscode-font-family); font-size: 13px;
+    color: var(--vscode-foreground); background: var(--vscode-editor-background);
+}
+#app { display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 40px; max-width: 1100px; margin: 0 auto; padding: 36px 32px; }
+@media (max-width: 760px) { #app { grid-template-columns: 1fr; } }
+h1 { font-size: 24px; font-weight: 400; margin: 0 0 16px; }
+h2 { font-size: 14px; font-weight: 600; margin: 0 0 10px; }
+h2 + * { margin-bottom: 24px; }
+.muted { opacity: .7; }
+.note { font-size: 12px; margin-top: 12px; }
+.error { color: var(--vscode-errorForeground); }
+button { font-family: inherit; font-size: 13px; color: inherit; cursor: pointer; }
+
+#filters { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
+.chip { border: 1px solid var(--vscode-panel-border); background: transparent; border-radius: 12px; padding: 3px 12px; }
+.chip.on { background: var(--vscode-button-background); color: var(--vscode-button-foreground); border-color: transparent; }
+
+#cards { display: flex; flex-direction: column; gap: 6px; }
+.card {
+    display: flex; gap: 14px; align-items: flex-start; text-align: left; width: 100%;
+    padding: 12px 14px; border: 1px solid transparent; border-radius: 4px; background: var(--vscode-editorWidget-background, transparent);
+}
+.card:hover { border-color: var(--vscode-focusBorder); background: var(--vscode-list-hoverBackground); }
+.card .ico { font-size: 26px; width: 34px; text-align: center; line-height: 1; }
+.card .txt { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.card b { font-size: 14px; font-weight: 600; }
+.card small { opacity: .8; }
+.tags { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.tags i { font-style: normal; font-size: 11px; padding: 1px 7px; border-radius: 3px; background: var(--vscode-badge-background); color: var(--vscode-badge-foreground); }
+
+#config { max-width: 560px; }
+#config label { display: flex; flex-direction: column; gap: 5px; margin-bottom: 16px; }
+#config label.check { flex-direction: row; align-items: center; gap: 8px; }
+#config label[hidden] { display: none; }
+#config input:not([type=checkbox]), #config select {
+    font-family: inherit; font-size: 13px; padding: 5px 8px; width: 100%;
+    color: var(--vscode-input-foreground); background: var(--vscode-input-background);
+    border: 1px solid var(--vscode-input-border, var(--vscode-panel-border)); border-radius: 2px;
+}
+#config input:focus, #config select:focus { outline: 1px solid var(--vscode-focusBorder); outline-offset: -1px; }
+.row { display: flex; gap: 6px; }
+.row button { white-space: nowrap; padding: 0 12px; border: none; background: var(--vscode-button-secondaryBackground); color: var(--vscode-button-secondaryForeground); }
+.link { background: none; border: none; padding: 0; margin-bottom: 12px; color: var(--vscode-textLink-foreground); }
+.actions { display: flex; justify-content: flex-end; margin-top: 8px; }
+.primary { padding: 7px 22px; border: none; border-radius: 2px; background: var(--vscode-button-background); color: var(--vscode-button-foreground); }
+.primary:hover { background: var(--vscode-button-hoverBackground); }
+.primary:disabled { opacity: .6; cursor: default; }
+
+.big {
+    display: flex; gap: 12px; align-items: center; width: 100%; text-align: left; margin-bottom: 6px;
+    padding: 10px 12px; border: 1px solid transparent; border-radius: 4px; background: var(--vscode-editorWidget-background, transparent);
+}
+.big:hover, .recent:hover { border-color: var(--vscode-focusBorder); background: var(--vscode-list-hoverBackground); }
+.big span { font-size: 20px; }
+.big div, .recent { display: flex; flex-direction: column; gap: 2px; }
+.big small, .recent small { opacity: .7; font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.recent { width: 100%; text-align: left; padding: 6px 10px; border: 1px solid transparent; border-radius: 4px; background: transparent; margin-bottom: 2px; }

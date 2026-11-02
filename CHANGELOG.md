@@ -1,5 +1,11 @@
 # Cambios
 
+## 0.4.0
+
+- Página de inicio estilo Visual Studio para crear programas: plantillas (consola, Windows Forms, biblioteca) y ejemplos listos para correr (Calculadora, Lista de tareas, Adivina el número, Tabla de multiplicar), con nombre, ubicación, versión de .NET y lenguaje. Recientes y abrir solución/carpeta.
+- Simulador: modo **▶ Simular** en el diseñador para probar la interfaz sin compilar.
+- Linux/macOS: Windows Forms se compila (EnableWindowsTargeting) y se ejecuta con Wine; .NET Framework con Mono; si no hay, se ofrece el simulador.
+
 ## 0.3.0
 
 - Los formularios se abren en el diseñador por defecto, también desde el explorador normal de VS Code. El código se abre con F7 / Ver código, al hacer doble clic en un control o desde Problemas / Ir a definición. Ajuste `miniStudio.designer.openByDefault`.

@@ -15,7 +15,8 @@ export class DesignerPanel {
     private timer?: NodeJS.Timeout;
     private readonly disposables: vscode.Disposable[] = [];
 
-    static open(context: vscode.ExtensionContext, file: string) {
+    /** Abre el diseñador del formulario; con preview=true arranca en el simulador. */
+    static open(context: vscode.ExtensionContext, file: string, preview = false) {
         const designer = designerFileFor(file);
         if (!fs.existsSync(designer)) {
             vscode.window.showErrorMessage(`No existe ${path.basename(designer)}; este archivo no es un formulario.`);
@@ -23,8 +24,14 @@ export class DesignerPanel {
         }
         const key = designer.toLowerCase();
         const existing = DesignerPanel.panels.get(key);
-        if (existing) { existing.panel.reveal(); return; }
-        DesignerPanel.panels.set(key, new DesignerPanel(context, designer));
+        if (existing) {
+            existing.panel.reveal();
+            if (preview) { existing.panel.webview.postMessage({ type: 'preview', on: true }); }
+            return;
+        }
+        const created = new DesignerPanel(context, designer);
+        created.startInPreview = preview;
+        DesignerPanel.panels.set(key, created);
     }
 
     static activeCodeFile(): string | undefined {
@@ -35,6 +42,7 @@ export class DesignerPanel {
     }
 
     private readonly panel: vscode.WebviewPanel;
+    private startInPreview = false;
 
     private constructor(private readonly context: vscode.ExtensionContext, private readonly designerFile: string) {
         const media = vscode.Uri.joinPath(context.extensionUri, 'media');
@@ -70,7 +78,10 @@ export class DesignerPanel {
 
     private async onMessage(m: any) {
         switch (m.type) {
-            case 'ready': this.load(); break;
+            case 'ready':
+                this.load();
+                if (this.startInPreview) { this.panel.webview.postMessage({ type: 'preview', on: true }); this.startInPreview = false; }
+                break;
             case 'change': this.schedule(m.form); break;
             case 'createHandler': await this.flush(); await this.createHandler(m.handler, m.event); break;
             case 'viewCode': await this.flush(); await openCode(codeFileFor(this.designerFile)); break;
@@ -165,9 +176,12 @@ export class DesignerPanel {
       <button id="btnFront" title="Traer al frente">Al frente</button><button id="btnBack" title="Enviar al fondo">Al fondo</button>
       <span class="sep"></span>
       <button id="btnCode" title="Ver código (F7)">Ver código</button>
+      <span class="sep"></span>
+      <button id="btnPreview" title="Probar la interfaz: los controles responden, pero el código C# no se ejecuta (Esc para salir)">▶ Simular</button>
       <span id="status"></span>
     </div>
     <div id="surfaceScroll"><div id="formWin"><div id="formTitle"><span id="formTitleText"></span><span class="wbtns">─ ☐ ✕</span></div><div id="surface"></div><div id="formGrip" title="Cambiar el tamaño del formulario"></div></div><div id="tray"></div></div>
+    <div id="toast"></div>
   </main>
   <aside id="props"><div class="pane-title">Propiedades</div><select id="selCombo"></select><div id="tabs"><button data-tab="props" class="on">Propiedades</button><button data-tab="events">⚡ Eventos</button></div><div id="grid"></div></aside>
 </div>

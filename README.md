@@ -7,7 +7,7 @@ Extensión de VS Code que lo convierte en un **mini Visual Studio Community** pa
 
 | Visual Studio | Mini Studio |
 |---|---|
-| Archivo → Nuevo → Proyecto | **Nuevo proyecto...**: Consola (con `Main` clásico o instrucciones de nivel superior), Windows Forms, Biblioteca de clases. Crea la solución `.sln` como VS |
+| Ventana de inicio / Archivo → Nuevo → Proyecto | **Página de inicio** (botón 🏠 del explorador o *Nuevo proyecto...*): plantillas de Consola, Windows Forms y Biblioteca de clases, y **ejemplos listos para correr** (Calculadora, Lista de tareas, Adivina el número, Tabla de multiplicar). Nombre, ubicación, versión de .NET y lenguaje, como en VS. Se abre sola en una ventana vacía |
 | Explorador de soluciones | Vista propia en la barra lateral: solución → proyectos → Dependencias (NuGet y referencias) → carpetas y archivos; `Form1.Designer.cs` y `.resx` anidados bajo `Form1.cs` |
 | Proyecto de inicio | Clic derecho → *Establecer como proyecto de inicio* (se marca en el árbol y en la barra de estado) |
 | Debug / Release | Clic en la barra de estado para cambiar |
@@ -18,6 +18,21 @@ Extensión de VS Code que lo convierte en un **mini Visual Studio Community** pa
 | Agregar → Clase / Interfaz / Windows Form / Carpeta | Clic derecho en un proyecto o carpeta; el espacio de nombres se calcula según la carpeta |
 | Administrar paquetes NuGet | *Agregar paquete NuGet...* (`Id` o `Id@versión`) y quitar desde Dependencias |
 | Diseñador de Windows Forms | Al abrir un formulario (desde cualquier explorador) sale el **diseñador**, como en VS. Ver código con **F7**; volver al diseño con **Shift+F7** |
+
+### Simulador
+
+Botón **▶ Simular** del diseñador (o clic derecho en un formulario → *Simular formulario*): el formulario se vuelve
+interactivo (escribir en TextBox, marcar CheckBox, elegir en ComboBox, pulsar botones...) y te dice qué controlador
+de C# se ejecutaría (`btn7.Click → Digito_Click()`). El código C# solo corre en la app real. Sirve para probar la
+interfaz en cualquier sistema operativo. **Esc** para salir.
+
+### Linux y macOS
+
+- Apps de consola: compilar, ejecutar y depurar igual que en Windows.
+- Windows Forms: se compilan sin el error NETSDK1100 y, si está instalado **Wine** (`sudo apt install wine64`),
+  Ctrl+F5 las ejecuta con Wine (se compilan autocontenidas para win-x64, así que Wine no necesita tener .NET).
+  Sin Wine, se ofrece el simulador. No se pueden depurar con F5 fuera de Windows.
+- Proyectos clásicos de .NET Framework: con **Mono** (`msbuild` + `mono`) si está instalado.
 
 ### Diseñador de formularios
 
@@ -48,7 +63,7 @@ Extensión de VS Code que lo convierte en un **mini Visual Studio Community** pa
 Descarga el `.vsix` de [Releases](https://github.com/pinedaricourt/vscode-mini-studio/releases) e instálalo:
 
 ```bash
-code --install-extension mini-studio-0.3.0.vsix
+code --install-extension mini-studio-0.4.0.vsix
 ```
 
 O desde el código fuente:
@@ -78,6 +93,7 @@ Pulsa F5 en VS Code con esta carpeta abierta para lanzar una ventana de prueba c
 | `miniStudio.build.msbuildPath` | (vacío) | MSBuild.exe para proyectos .NET Framework; vacío = se busca con vswhere |
 | `miniStudio.build.saveAllBeforeBuild` | `true` | Guardar todo antes de compilar |
 | `miniStudio.designer.openByDefault` | `true` | Abrir los formularios en el diseñador en vez de como código |
+| `miniStudio.startPage.showOnStartup` | `true` | Mostrar la página de inicio en ventanas vacías |
 | `miniStudio.designer.gridSize` | `4` | Cuadrícula del diseñador (px) |
 
 ## Limitaciones

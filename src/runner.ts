@@ -3,7 +3,7 @@ import * as path from 'path';
 import * as fs from 'fs';
 import * as os from 'os';
 import { spawn, ChildProcess, execFile } from 'child_process';
-import { ProjectInfo, getTargetInfo, TargetInfo, isLegacyProject } from './projects';
+import { ProjectInfo, getTargetInfo, TargetInfo, isLegacyProject, isWindowsDesktop, which } from './projects';
 
 /** Lanza y detiene la app del proyecto de inicio (sin depurador o con el depurador de C#). */
 export class Runner {
@@ -26,10 +26,10 @@ export class Runner {
         this.runningEmitter.fire(this.isRunning);
     }
 
-    async resolveTarget(p: ProjectInfo, configuration: string): Promise<TargetInfo | undefined> {
+    async resolveTarget(p: ProjectInfo, configuration: string, props: string[] = []): Promise<TargetInfo | undefined> {
         let info: TargetInfo;
         try {
-            info = await getTargetInfo(p, configuration);
+            info = await getTargetInfo(p, configuration, props);
         } catch (e) {
             vscode.window.showErrorMessage(`No se pudo leer la salida del proyecto ${p.name}: ${(e as Error).message}`);
             return undefined;
@@ -48,8 +48,23 @@ export class Runner {
     /** Ctrl+F5 */
     async startWithoutDebugging(p: ProjectInfo, info: TargetInfo) {
         await this.stop();
-        const { cmd, args } = launchCommand(info.targetPath);
+        let { cmd, args } = launchCommand(info.targetPath);
         const isConsole = /^exe$/i.test(info.outputType);
+
+        // Fuera de Windows, las apps de escritorio de Windows se corren con Wine (o Mono si es .NET Framework)
+        if (process.platform !== 'win32' && !isConsole && isWindowsDesktop(p.file)) {
+            const launcher = foreignLauncher(p, info);
+            if (!launcher) {
+                const pick = await vscode.window.showWarningMessage(
+                    `${p.name} es una app de Windows Forms. Para ejecutarla en ${process.platform === 'darwin' ? 'macOS' : 'Linux'} instala Wine` +
+                    `${isLegacyProject(p.file) ? ' o Mono' : ''} (p. ej. 'sudo apt install wine64'). Mientras tanto puedes probar la interfaz en el simulador.`,
+                    'Abrir simulador', 'Cómo instalar Wine');
+                if (pick === 'Abrir simulador') { vscode.commands.executeCommand('miniStudio.previewForm', p.file); }
+                if (pick === 'Cómo instalar Wine') { vscode.env.openExternal(vscode.Uri.parse('https://wiki.winehq.org/Download')); }
+                return;
+            }
+            ({ cmd, args } = launcher);
+        }
 
         if (isConsole) {
             const runIn = vscode.workspace.getConfiguration('miniStudio').get<string>('console.runIn', 'integratedTerminal');
@@ -95,6 +110,11 @@ export class Runner {
 
     /** F5 */
     async startDebugging(p: ProjectInfo, info: TargetInfo, folder: vscode.WorkspaceFolder | undefined) {
+        if (process.platform !== 'win32' && isWindowsDesktop(p.file) && !/^exe$/i.test(info.outputType)) {
+            vscode.window.showInformationMessage('Fuera de Windows no se puede depurar una app de Windows Forms; se ejecuta sin depurador (Wine/Mono).');
+            await this.startWithoutDebugging(p, info);
+            return;
+        }
         if (!vscode.extensions.getExtension('ms-dotnettools.csharp')) {
             const pick = await vscode.window.showWarningMessage(
                 'Para depurar (F5) se necesita la extensión C# de Microsoft. ¿Instalarla ahora? (Mientras tanto puedes usar Ctrl+F5 para iniciar sin depurar.)',
@@ -130,6 +150,18 @@ export class Runner {
         }
         this.fire();
     }
+}
+
+/** Wine para apps .NET (autocontenidas win-x64) o Mono/Wine para .NET Framework. */
+function foreignLauncher(p: ProjectInfo, info: TargetInfo): { cmd: string; args: string[] } | undefined {
+    const wine = which('wine') ?? which('wine64');
+    if (isLegacyProject(p.file)) {
+        const mono = which('mono');
+        if (mono) { return { cmd: mono, args: [info.targetPath] }; }
+        return wine ? { cmd: wine, args: [info.targetPath] } : undefined;
+    }
+    const exe = info.targetPath.replace(/\.dll$/i, '.exe');
+    return wine && fs.existsSync(exe) ? { cmd: wine, args: [exe] } : undefined;
 }
 
 function launchCommand(targetPath: string): { cmd: string; args: string[] } {

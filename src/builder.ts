@@ -57,6 +57,7 @@ export class Builder {
             args = [kind === 'rebuild' ? 'build' : kind, target, '-c', configuration, '-nologo', verbosity, '-clp:NoSummary'];
             if (kind === 'rebuild') { args.push('--no-incremental'); }
         }
+        if (process.platform !== 'win32' && !vs && !props.some(p => p.startsWith('EnableWindowsTargeting'))) { props = [...props, 'EnableWindowsTargeting=true']; }
         args.push(...props.map(p => `-p:${p}`));
 
         const byFile = new Map<string, vscode.Diagnostic[]>();

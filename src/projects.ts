@@ -138,6 +138,7 @@ let vsMsbuild: string | null | undefined;
 export function findVsMsbuild(): string | undefined {
     if (vsMsbuild !== undefined) { return vsMsbuild ?? undefined; }
     vsMsbuild = null;
+    if (process.platform !== 'win32') { vsMsbuild = which('msbuild') ?? null; return vsMsbuild ?? undefined; }
     const custom = vscode.workspace.getConfiguration('miniStudio').get<string>('build.msbuildPath');
     if (custom && fs.existsSync(custom)) { return vsMsbuild = custom; }
     const vswhere = path.join(process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', 'Microsoft Visual Studio', 'Installer', 'vswhere.exe');
@@ -192,8 +193,8 @@ export interface TargetInfo {
 const targetCache = new Map<string, { mtime: number; info: TargetInfo }>();
 
 /** Pregunta a MSBuild dónde queda el ensamblado de salida. */
-export async function getTargetInfo(p: ProjectInfo, configuration: string): Promise<TargetInfo> {
-    const key = `${norm(p.file)}|${configuration}`;
+export async function getTargetInfo(p: ProjectInfo, configuration: string, props: string[] = []): Promise<TargetInfo> {
+    const key = `${norm(p.file)}|${configuration}|${props.join(';')}`;
     const mtime = fs.statSync(p.file).mtimeMs;
     const cached = targetCache.get(key);
     if (cached && cached.mtime === mtime) { return cached.info; }
@@ -201,7 +202,7 @@ export async function getTargetInfo(p: ProjectInfo, configuration: string): Prom
     const vs = isLegacyProject(p.file) ? findVsMsbuild() : undefined;
     const [cmd, pre] = vs ? [vs, []] : ['dotnet', ['msbuild']];
     const stdout = await new Promise<string>((resolve, reject) => {
-        execFile(cmd, [...pre, p.file, '-nologo', '-getProperty:TargetPath', '-getProperty:OutputType', `-p:Configuration=${configuration}`],
+        execFile(cmd, [...pre, p.file, '-nologo', '-getProperty:TargetPath', '-getProperty:OutputType', `-p:Configuration=${configuration}`, ...props.map(x => `-p:${x}`)],
             { cwd: p.dir, windowsHide: true }, (err, out, errOut) => err ? reject(new Error(errOut || out || err.message)) : resolve(out));
     });
     const json = JSON.parse(stdout);
@@ -258,4 +259,28 @@ export function designerFileFor(file: string): string {
 
 export function codeFileFor(file: string): string {
     return file.replace(/\.Designer\.cs$/i, '.cs');
+}
+
+/** Ruta de un ejecutable en el PATH (o undefined). */
+export function which(cmd: string): string | undefined {
+    try {
+        const out = execFileSync(process.platform === 'win32' ? 'where' : 'which', [cmd], { encoding: 'utf8', windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] });
+        return out.split(/\r?\n/).map(s => s.trim()).find(Boolean);
+    } catch { return undefined; }
+}
+
+/** True si el proyecto es una app de escritorio de Windows (WinForms/WPF o TargetFramework -windows). */
+export function isWindowsDesktop(file: string): boolean {
+    const d = readCsproj(file);
+    return d.legacy ? /^winexe$/i.test(d.outputType) || d.useWindowsForms : d.useWindowsForms || /-windows/i.test(d.targetFramework)
+        || /<UseWPF>\s*true/i.test(fs.readFileSync(file, 'utf8'));
+}
+
+/**
+ * Propiedades MSBuild para compilar fuera de Windows una app de escritorio de Windows (SDK) de forma
+ * que se pueda correr con Wine: autocontenida para win-x64, así Wine no necesita el runtime de .NET.
+ */
+export function wineBuildProps(p: ProjectInfo): string[] {
+    if (process.platform === 'win32' || readCsproj(p.file).legacy || !isWindowsDesktop(p.file)) { return []; }
+    return ['EnableWindowsTargeting=true', 'RuntimeIdentifier=win-x64', 'SelfContained=true'];
 }
