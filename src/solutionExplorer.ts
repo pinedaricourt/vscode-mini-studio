@@ -71,7 +71,8 @@ export class SolutionExplorer implements vscode.TreeDataProvider<Node> {
         n.description = `${kind}${data.targetFramework ? ' · ' + data.targetFramework : ''}${data.legacy ? ' (clásico)' : ''}${isStartup ? ' · inicio' : ''}`;
         n.tooltip = p.file;
         n.iconPath = new vscode.ThemeIcon(isStartup ? 'debug-start' : 'project', isStartup ? new vscode.ThemeColor('debugIcon.startForeground') : undefined);
-        n.contextValue = isStartup ? 'project.startup' : 'project';
+        // .vb al final: los menús de VB (Agregar módulo) solo aparecen en proyectos de Visual Basic
+        n.contextValue = (isStartup ? 'project.startup' : 'project') + (p.lang === 'vb' ? '.vb' : '');
         n.resourceUri = undefined;
         n.label = isStartup ? { label: p.name, highlights: [[0, p.name.length]] } : p.name;
         return n;
@@ -121,13 +122,14 @@ export class SolutionExplorer implements vscode.TreeDataProvider<Node> {
                 // otra carpeta de proyecto anidada: no la mostramos dentro de este
                 if (fs.readdirSync(full).some(f => /\.(cs|vb)proj$/i.test(f))) { continue; }
                 const n = new Node('folder', e.name, vscode.TreeItemCollapsibleState.Collapsed, full, p);
+                if (p.lang === 'vb') { n.contextValue = 'folder.vb'; }
                 n.iconPath = vscode.ThemeIcon.Folder;
                 folders.push(n);
             } else {
                 if (/\.(cs|vb)proj(\.user)?$/i.test(e.name) || /\.sln$/i.test(e.name)) { continue; }
                 // X.Designer.cs y X.resx se anidan bajo X.cs como en Visual Studio
-                const m = /^(.*)\.(Designer\.cs|resx)$/i.exec(e.name);
-                if (m && names.has((m[1] + '.cs').toLowerCase())) { continue; }
+                const m = /^(.*)\.(Designer\.(cs|vb)|resx)$/i.exec(e.name);
+                if (m && (names.has((m[1] + '.cs').toLowerCase()) || names.has((m[1] + '.vb').toLowerCase()))) { continue; }
                 files.push(this.fileNode(p, full));
             }
         }
@@ -137,8 +139,9 @@ export class SolutionExplorer implements vscode.TreeDataProvider<Node> {
 
     private fileNode(p: ProjectInfo, full: string): Node {
         const base = path.basename(full);
-        const stem = full.replace(/\.cs$/i, '');
-        const hasNested = /\.cs$/i.test(full) && (fs.existsSync(stem + '.Designer.cs') || fs.existsSync(stem + '.resx'));
+        const ext = (/\.(cs|vb)$/i.exec(full)?.[1] ?? '').toLowerCase();
+        const stem = full.replace(/\.(cs|vb)$/i, '');
+        const hasNested = !!ext && (fs.existsSync(`${stem}.Designer.${ext}`) || fs.existsSync(stem + '.resx'));
         const form = isFormFile(full);
         const n = new Node(form ? 'form' : 'file', base, hasNested ? vscode.TreeItemCollapsibleState.Collapsed : vscode.TreeItemCollapsibleState.None, full, p);
         if (form) {
@@ -152,8 +155,9 @@ export class SolutionExplorer implements vscode.TreeDataProvider<Node> {
     }
 
     private nestedChildren(p: ProjectInfo, file: string): Node[] {
-        const stem = file.replace(/\.cs$/i, '');
-        return [stem + '.Designer.cs', stem + '.resx'].filter(f => fs.existsSync(f)).map(f => {
+        const ext = (/\.(cs|vb)$/i.exec(file)?.[1] ?? 'cs').toLowerCase();
+        const stem = file.replace(/\.(cs|vb)$/i, '');
+        return [`${stem}.Designer.${ext}`, stem + '.resx'].filter(f => fs.existsSync(f)).map(f => {
             const n = new Node('file', path.basename(f), vscode.TreeItemCollapsibleState.None, f, p);
             n.command = { command: 'vscode.open', title: 'Abrir', arguments: [vscode.Uri.file(f)] };
             return n;

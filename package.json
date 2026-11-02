@@ -1,8 +1,8 @@
 {
   "name": "mini-studio",
   "displayName": "Mini Studio para .NET",
-  "description": "Convierte VS Code en un mini Visual Studio Community: explorador de soluciones, compilar/ejecutar/depurar apps de consola y Windows Forms, plantillas y diseñador visual de formularios.",
-  "version": "0.4.0",
+  "description": "Convierte VS Code en un mini Visual Studio Community: explorador de soluciones, compilar/ejecutar/depurar apps de consola y Windows Forms en C# y Visual Basic, plantillas y diseñador visual de formularios.",
+  "version": "0.5.0",
   "publisher": "pinedaricourt",
   "license": "MIT",
   "icon": "media/icon.png",
@@ -26,7 +26,9 @@
     "visual studio",
     "console",
     "wine",
-    "linux"
+    "linux",
+    "visual basic",
+    "vb.net"
   ],
   "activationEvents": [
     "workspaceContains:**/*.csproj",
@@ -214,6 +216,11 @@
         "command": "miniStudio.openMainFile",
         "title": "Abrir archivo principal",
         "category": "Mini Studio"
+      },
+      {
+        "command": "miniStudio.addModule",
+        "title": "Agregar módulo...",
+        "category": "Mini Studio"
       }
     ],
     "menus": {
@@ -311,6 +318,11 @@
           "group": "2_add@2"
         },
         {
+          "command": "miniStudio.addModule",
+          "when": "view == miniStudio.solutionExplorer && viewItem =~ /^(project|folder).*\\.vb$/",
+          "group": "2_add@2"
+        },
+        {
           "command": "miniStudio.addForm",
           "when": "view == miniStudio.solutionExplorer && viewItem =~ /^(project|folder)/",
           "group": "2_add@3"
@@ -337,7 +349,7 @@
         },
         {
           "command": "miniStudio.setStartupProject",
-          "when": "view == miniStudio.solutionExplorer && viewItem == project",
+          "when": "view == miniStudio.solutionExplorer && viewItem =~ /^project(\\.vb)?$/",
           "group": "4_run@1"
         },
         {
@@ -362,7 +374,7 @@
         },
         {
           "command": "miniStudio.deleteItem",
-          "when": "view == miniStudio.solutionExplorer && viewItem =~ /^(folder|file|form)$/",
+          "when": "view == miniStudio.solutionExplorer && viewItem =~ /^(folder|file|form)(\\.vb)?$/",
           "group": "9_delete"
         },
         {
@@ -430,6 +442,10 @@
         {
           "command": "miniStudio.openMainFile",
           "when": "false"
+        },
+        {
+          "command": "miniStudio.addModule",
+          "when": "miniStudio.hasProjects"
         }
       ]
     },

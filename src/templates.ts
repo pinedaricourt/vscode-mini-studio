@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import { execFile } from 'child_process';
 import { Workspace, ProjectInfo, namespaceFor, readCsproj, toIdentifier } from './projects';
 import { applySample } from './samples';
+import { generateDesigner } from './designer/model';
 
 export function exec(cmd: string, args: string[], cwd: string): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -56,7 +57,7 @@ export async function createProject(o: CreateOptions, output: vscode.OutputChann
         output.appendLine(await exec('dotnet', ['new', 'sln', '-n', path.basename(slnFile, '.sln'), '-o', path.dirname(slnFile)], path.dirname(slnFile)));
     }
     output.appendLine(await exec('dotnet', ['sln', slnFile, 'add', projFile], path.dirname(slnFile)));
-    if (o.sample) { applySample(o.sample, projectDir, toIdentifier(o.name, true)); }
+    if (o.sample) { applySample(o.sample, projectDir, toIdentifier(o.name, true), o.lang); }
     return projFile;
 }
 
@@ -99,16 +100,25 @@ async function writeAndOpen(file: string, content: string) {
     await vscode.window.showTextDocument(doc);
 }
 
-export async function addClass(p: ProjectInfo, folder: string, kind: 'class' | 'interface') {
-    if (p.lang !== 'cs') { vscode.window.showWarningMessage('Las plantillas de elementos solo están disponibles para C#.'); return; }
-    const ext = '.cs';
-    const name = await askItemName(kind === 'class' ? 'Agregar clase' : 'Agregar interfaz',
-        nextFreeName(folder, kind === 'class' ? 'Class' : 'IInterface', ext), ext, folder);
+const ITEM_TITLE = { class: 'Agregar clase', interface: 'Agregar interfaz', module: 'Agregar módulo' };
+const ITEM_BASE = { class: 'Class', interface: 'IInterface', module: 'Module' };
+
+export async function addClass(p: ProjectInfo, folder: string, kind: 'class' | 'interface' | 'module') {
+    const vb = p.lang === 'vb';
+    if (kind === 'module' && !vb) { vscode.window.showWarningMessage('Los módulos son de Visual Basic; en C# usa una clase static.'); return; }
+    const ext = vb ? '.vb' : '.cs';
+    const name = await askItemName(ITEM_TITLE[kind], nextFreeName(folder, ITEM_BASE[kind], ext), ext, folder);
     if (!name) { return; }
-    const ns = namespaceFor(p, folder);
     const file = path.join(folder, name + ext);
-    await writeAndOpen(file,
-        `${usingsFor(p)}namespace ${ns}\n{\n    internal ${kind} ${name}\n    {\n    }\n}\n`);
+    if (vb) {
+        // En VB el espacio de nombres raíz lo pone el proyecto: los archivos no llevan Namespace
+        const body = kind === 'module' ? `Module ${name}\n\nEnd Module\n`
+            : kind === 'interface' ? `Public Interface ${name}\n\nEnd Interface\n` : `Public Class ${name}\n\nEnd Class\n`;
+        await writeAndOpen(file, body);
+    } else {
+        await writeAndOpen(file,
+            `${usingsFor(p)}namespace ${namespaceFor(p, folder)}\n{\n    internal ${kind} ${name}\n    {\n    }\n}\n`);
+    }
     registerInLegacyProject(p, [{ file }]);
 }
 
@@ -139,7 +149,7 @@ function registerInLegacyProject(p: ProjectInfo, items: { file: string; subType?
 }
 
 export async function addForm(p: ProjectInfo, folder: string): Promise<string | undefined> {
-    if (p.lang !== 'cs') { vscode.window.showWarningMessage('El diseñador de Mini Studio solo admite formularios en C#.'); return; }
+    const vb = p.lang === 'vb';
     const data = readCsproj(p.file);
     if (!data.useWindowsForms && !data.legacy) {
         const pick = await vscode.window.showWarningMessage(
@@ -147,8 +157,17 @@ export async function addForm(p: ProjectInfo, folder: string): Promise<string | 
         if (pick !== 'Activar') { return; }
         enableWindowsForms(p.file);
     }
-    const name = await askItemName('Agregar Windows Form', nextFreeName(folder, 'Form', '.cs'), '.cs', folder);
+    const ext = vb ? '.vb' : '.cs';
+    const name = await askItemName('Agregar Windows Form', nextFreeName(folder, 'Form', ext), ext, folder);
     if (!name) { return; }
+    if (vb) {
+        const code = path.join(folder, `${name}.vb`);
+        const designer = path.join(folder, `${name}.Designer.vb`);
+        fs.writeFileSync(code, `Public Class ${name}\n\nEnd Class\n`, 'utf8');
+        fs.writeFileSync(designer, emptyVbDesigner(name), 'utf8');
+        registerInLegacyProject(p, [{ file: code, subType: 'Form' }, { file: designer, dependentUpon: `${name}.vb` }]);
+        return code;
+    }
     const ns = namespaceFor(p, folder);
     const code = path.join(folder, `${name}.cs`);
     const designer = path.join(folder, `${name}.Designer.cs`);
@@ -160,6 +179,18 @@ export async function addForm(p: ProjectInfo, folder: string): Promise<string | 
     fs.writeFileSync(designer, emptyDesigner(ns, name), 'utf8');
     registerInLegacyProject(p, [{ file: code, subType: 'Form' }, { file: designer, dependentUpon: `${name}.cs` }]);
     return code;
+}
+
+export function emptyVbDesigner(cls: string): string {
+    return generateDesigner({
+        lang: 'vb', namespace: '', fileScoped: false, preamble: '', className: cls, events: {}, extra: [], controls: [],
+        props: {
+            AutoScaleDimensions: 'New System.Drawing.SizeF(8.0!, 20.0!)',
+            AutoScaleMode: 'System.Windows.Forms.AutoScaleMode.Font',
+            ClientSize: 'New System.Drawing.Size(800, 450)',
+            Text: `"${cls}"`,
+        },
+    });
 }
 
 export function emptyDesigner(ns: string, cls: string): string {

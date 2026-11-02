@@ -70,9 +70,48 @@
     const short = t => t.slice(t.lastIndexOf('.') + 1);
     const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
+    // Lenguaje del formulario: 'cs' o 'vb'. Las expresiones se guardan en la sintaxis de ese lenguaje.
+    let VB = false;
+    const SELF = () => VB ? 'Me' : 'this';
+    const LANG_NAME = () => VB ? 'Visual Basic' : 'C#';
+    const lit = v => !VB ? v : v === 'true' ? 'True' : v === 'false' ? 'False' : v === 'this' ? 'Me' : v;
+    const selfRe = name => new RegExp(`\\b(?:this|Me)\\.${name}\\b`, VB ? 'gi' : 'g');
+
+    /** Texto de un literal VB: "a""b" & ChrW(13) & vbCrLf & "c" */
+    function decodeVbStr(expr) {
+        const parts = [];
+        let i = 0;
+        while (i < expr.length) {
+            const rest = expr.slice(i);
+            let m;
+            if ((m = /^\s*&\s*/.exec(rest)) && parts.length) { i += m[0].length; continue; }
+            if ((m = /^"((?:[^"]|"")*)"/.exec(rest))) { parts.push(m[1].replace(/""/g, '"')); i += m[0].length; continue; }
+            if ((m = /^(?:Global\.)?(?:Microsoft\.VisualBasic\.)?(?:Strings\.)?ChrW?\((\d+)\)/i.exec(rest))) { parts.push(String.fromCharCode(+m[1])); i += m[0].length; continue; }
+            if ((m = /^(?:Microsoft\.VisualBasic\.)?(?:Constants\.)?(vbCrLf|vbNewLine|vbCr|vbLf|vbTab)\b/i.exec(rest))) {
+                parts.push({ vbcrlf: '\r\n', vbnewline: '\r\n', vbcr: '\r', vblf: '\n', vbtab: '\t' }[m[1].toLowerCase()]);
+                i += m[0].length;
+                continue;
+            }
+            if ((m = /^(?:Microsoft\.VisualBasic\.)?ControlChars\.(CrLf|NewLine|Cr|Lf|Tab|Quote)\b/i.exec(rest))) {
+                parts.push({ crlf: '\r\n', newline: '\r\n', cr: '\r', lf: '\n', tab: '\t', quote: '"' }[m[1].toLowerCase()]);
+                i += m[0].length;
+                continue;
+            }
+            return undefined;
+        }
+        return parts.length ? parts.join('') : undefined;
+    }
+    function encodeVbStr(s) {
+        const chunks = s.split(/(\r|\n|\t)/).filter(x => x !== '');
+        if (!chunks.length) { return '""'; }
+        return chunks.map(c => c === '\r' ? 'Global.Microsoft.VisualBasic.ChrW(13)' : c === '\n' ? 'Global.Microsoft.VisualBasic.ChrW(10)'
+            : c === '\t' ? 'Global.Microsoft.VisualBasic.ChrW(9)' : '"' + c.replace(/"/g, '""') + '"').join(' & ');
+    }
+
     function decodeStr(expr) {
         if (expr == null) { return undefined; }
         expr = expr.trim();
+        if (VB) { return decodeVbStr(expr); }
         if (expr.startsWith('@"')) { return expr.slice(2, -1).replace(/""/g, '"'); }
         if (!expr.startsWith('"')) { return undefined; }
         const body = expr.slice(1, -1);
@@ -84,14 +123,14 @@
             }
         });
     }
-    const encodeStr = s => '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\t/g, '\\t') + '"';
+    const encodeStr = s => VB ? encodeVbStr(s) : '"' + s.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\r/g, '\\r').replace(/\n/g, '\\n').replace(/\t/g, '\\t') + '"';
     function pair(expr) {
         const m = /\(\s*(-?\d+)F?\s*,\s*(-?\d+)F?\s*\)/.exec(expr || '');
         return m ? [+m[1], +m[2]] : undefined;
     }
-    const pointExpr = (x, y) => `new System.Drawing.Point(${x}, ${y})`;
-    const sizeExpr = (w, h) => `new System.Drawing.Size(${w}, ${h})`;
-    const isTrue = (expr, def) => expr === undefined ? def : expr.trim() === 'true';
+    const pointExpr = (x, y) => `${VB ? 'New' : 'new'} System.Drawing.Point(${x}, ${y})`;
+    const sizeExpr = (w, h) => `${VB ? 'New' : 'new'} System.Drawing.Size(${w}, ${h})`;
+    const isTrue = (expr, def) => expr === undefined ? def : expr.trim().toLowerCase() === 'true';
     const SYS_COLORS = { Control: '#f0f0f0', ControlText: '#000000', Window: '#ffffff', WindowText: '#000000', Highlight: '#0078d7', HighlightText: '#ffffff', ControlDark: '#a0a0a0', ControlLight: '#e3e3e3', ButtonFace: '#f0f0f0', Info: '#ffffe1', GrayText: '#6d6d6d', HotTrack: '#0066cc', ActiveCaption: '#99b4d1', AppWorkspace: '#ababab' };
     function cssColor(expr) {
         if (!expr) { return undefined; }
@@ -120,7 +159,7 @@
     }
     const colorExpr = hex => `System.Drawing.Color.FromArgb(${parseInt(hex.slice(1, 3), 16)}, ${parseInt(hex.slice(3, 5), 16)}, ${parseInt(hex.slice(5, 7), 16)})`;
     function cssFont(expr) {
-        const m = /Font\(\s*"([^"]+)"\s*,\s*([\d.]+)F?(?:\s*,\s*([^,)]+))?/.exec(expr || '');
+        const m = /Font\(\s*"([^"]+)"\s*,\s*([\d.]+)[F!]?(?:\s*,\s*([^,)]+))?/i.exec(expr || '');
         if (!m) { return undefined; }
         const style = m[3] || '';
         return {
@@ -132,7 +171,8 @@
     }
     function fontExpr(family, size, bold, italic) {
         const styles = [bold && 'System.Drawing.FontStyle.Bold', italic && 'System.Drawing.FontStyle.Italic'].filter(Boolean);
-        const st = styles.length ? styles.join(' | ') : 'System.Drawing.FontStyle.Regular';
+        const st = styles.length ? styles.join(VB ? ' Or ' : ' | ') : 'System.Drawing.FontStyle.Regular';
+        if (VB) { return `New System.Drawing.Font("${family}", ${Number.isInteger(size) ? size.toFixed(1) : size}!, ${st}, System.Drawing.GraphicsUnit.Point)`; }
         return `new System.Drawing.Font("${family}", ${size}F, ${st}, System.Drawing.GraphicsUnit.Point)`;
     }
 
@@ -149,21 +189,25 @@
         return out;
     }
     function itemsOf(c) {
-        const st = c.extra.find(x => new RegExp(`^(this\\.)?${c.name}\\.Items\\.AddRange\\(`).test(x));
+        const st = c.extra.find(x => new RegExp(`^((this|Me)\\.)?${c.name}\\.Items\\.AddRange\\(`, 'i').test(x));
         if (!st) { return []; }
-        return (st.match(/@?"(?:[^"\\]|\\.|"")*"/g) || []).map(decodeStr);
+        return (st.match(VB ? /"(?:[^"]|"")*"/g : /@?"(?:[^"\\]|\\.|"")*"/g) || []).map(decodeStr);
     }
     function setItems(c, items) {
-        c.extra = c.extra.filter(x => !new RegExp(`^(this\\.)?${c.name}\\.Items\\.AddRange\\(`).test(x));
+        c.extra = c.extra.filter(x => !new RegExp(`^((this|Me)\\.)?${c.name}\\.Items\\.AddRange\\(`, 'i').test(x));
         if (items.length) {
-            c.extra.push(`this.${c.name}.Items.AddRange(new object[] {\n${items.map(encodeStr).join(',\n')}})`);
+            c.extra.push(VB
+                ? `Me.${c.name}.Items.AddRange(New Object() {${items.map(encodeStr).join(', ')}})`
+                : `this.${c.name}.Items.AddRange(new object[] {\n${items.map(encodeStr).join(',\n')}})`);
         }
     }
     function uniqueName(type) {
-        const base = type[0].toLowerCase() + type.slice(1);
+        // VS usa button1 en C# y Button1 en VB (y en VB los nombres no distinguen mayúsculas)
+        const base = VB ? type : type[0].toLowerCase() + type.slice(1);
+        const same = (a, b) => VB ? a.toLowerCase() === b.toLowerCase() : a === b;
         for (let i = 1; ; i++) {
             const n = base + i;
-            if (!form.controls.some(c => c.name === n) && n !== form.className) { return n; }
+            if (!form.controls.some(c => same(c.name, n)) && !same(n, form.className)) { return n; }
         }
     }
 
@@ -242,7 +286,7 @@
         const h = owner.events[ev];
         const t = $('toast');
         t.textContent = h
-            ? `${c ? c.name : form.className}.${ev} → ${h}()  (el código C# se ejecuta en la app real)`
+            ? `${c ? c.name : form.className}.${ev} → ${h}()  (el código ${LANG_NAME()} se ejecuta en la app real)`
             : `${c ? c.name : form.className}.${ev} (sin controlador; doble clic en el diseñador para crearlo)`;
         t.classList.add('show');
         clearTimeout(announce.timer);
@@ -390,7 +434,7 @@
                 break;
             case 'TextBox': case 'MaskedTextBox': case 'RichTextBox': {
                 const pwd = p.PasswordChar || (isTrue(p.UseSystemPasswordChar, false) ? "'●'" : '');
-                el.textContent = pwd ? (pwd.replace(/'/g, '')[0] || '*').repeat(text.length) : text;
+                el.textContent = pwd ? (pwd.replace(/^'|'$|^"|"c$/gi, '')[0] || '*').repeat(text.length) : text;
                 if (isTrue(p.Multiline, false)) { el.classList.add('multi'); }
                 if (/HorizontalAlignment\.Right/.test(p.TextAlign || '')) { el.style.justifyContent = 'flex-end'; }
                 if (/HorizontalAlignment\.Center/.test(p.TextAlign || '')) { el.style.justifyContent = 'center'; }
@@ -672,7 +716,7 @@
             mutate(() => { owner.events[ev] = handler; });
         }
         vscode.postMessage({ type: 'change', form });
-        vscode.postMessage({ type: 'createHandler', handler, event: ev });
+        vscode.postMessage({ type: 'createHandler', handler, event: ev, owner: c ? c.name : null });
     }
 
     // ------------------------------------------------------------------ cuadro de herramientas
@@ -754,14 +798,14 @@
             at = [12 + (n % 10) * 12, 12 + (n % 10) * 12 + (parent && short(getCtl(parent).type) === 'GroupBox' ? 14 : 0)];
         }
         const name = uniqueName(type);
-        const c = { name, type: 'System.Windows.Forms.' + type, ctorArgs: tool.component ? 'this.components' : '', modifier: 'private', parent: tool.component ? null : parent, props: {}, events: {}, extra: [] };
+        const c = { name, type: 'System.Windows.Forms.' + type, ctorArgs: tool.component ? `${SELF()}.components` : '', modifier: VB ? 'Friend' : 'private', parent: tool.component ? null : parent, props: {}, events: {}, extra: [] };
         if (!tool.component) {
             c.props.Location = pointExpr(Math.max(0, at[0]), Math.max(0, at[1]));
             c.props.Size = sizeExpr(tool.size[0], tool.size[1]);
             c.props.TabIndex = String(childrenOf(parent).length);
             if (tool.text) { c.props.Text = encodeStr(name); }
         }
-        Object.assign(c.props, tool.init || {});
+        for (const [k, v] of Object.entries(tool.init || {})) { c.props[k] = lit(v); }
         mutate(() => { form.controls.unshift(c); sel = name; });
     }
 
@@ -825,8 +869,11 @@
                 inp.addEventListener('change', () => {
                     const v = inp.value.trim();
                     if (v && !/^[A-Za-z_]\w*$/.test(v)) { inp.value = owner.events[ev] || ''; return; }
+                    const old = owner.events[ev];
                     mutate(() => { if (v) { owner.events[ev] = v; } else { delete owner.events[ev]; } });
-                    if (v) { vscode.postMessage({ type: 'createHandler', handler: v, event: ev }); }
+                    // en VB el evento vive en el código (Handles): hay que quitarlo del método anterior
+                    if (VB && old && old !== v) { vscode.postMessage({ type: 'removeHandler', handler: old, event: ev, owner: c ? c.name : null }); }
+                    if (v) { vscode.postMessage({ type: 'createHandler', handler: v, event: ev, owner: c ? c.name : null }); }
                 });
                 const go = document.createElement('button');
                 go.textContent = '→';
@@ -861,14 +908,14 @@
         }
         const others = Object.keys(owner.props).filter(k => !known.has(k));
         if (others.length) {
-            grid.insertAdjacentHTML('beforeend', '<div class="cat">Otras propiedades (C#)</div>');
+            grid.insertAdjacentHTML('beforeend', `<div class="cat">Otras propiedades (${LANG_NAME()})</div>`);
             others.forEach(k => grid.appendChild(editorRow(owner, k, 'raw')));
         }
         grid.insertAdjacentHTML('beforeend', '<div class="cat">Agregar propiedad</div>');
         const add = mkRow('', false);
         add.classList.add('wide');
         const pk = document.createElement('input'); pk.placeholder = 'Propiedad (p. ej. Cursor)';
-        const pv = document.createElement('input'); pv.placeholder = 'Expresión C#';
+        const pv = document.createElement('input'); pv.placeholder = `Expresión ${LANG_NAME()}`;
         const pb = document.createElement('button'); pb.textContent = '+';
         pb.addEventListener('click', () => {
             const k = pk.value.trim(), v = pv.value.trim();
@@ -920,7 +967,8 @@
                 break;
             }
             case 'char':
-                input(cur ? cur.replace(/^'|'$/g, '') : '', v => setProp(owner, key, v ? `'${v[0] === '\'' ? '\\\'' : v[0]}'` : undefined));
+                input(cur ? cur.replace(/^'|'$|^"|"c$/gi, '').replace(/""/, '"') : '', v => setProp(owner, key, !v ? undefined
+                    : VB ? `"${v[0] === '"' ? '""' : v[0]}"c` : `'${v[0] === '\'' ? '\\\'' : v[0]}'`));
                 break;
             case 'int':
                 input(cur ?? '', v => setProp(owner, key, v.trim() === '' ? undefined : String(parseInt(v, 10) || 0)), 'number');
@@ -929,7 +977,7 @@
                 const cb = document.createElement('input');
                 cb.type = 'checkbox';
                 cb.checked = isTrue(cur, def === 'true');
-                cb.addEventListener('change', () => setProp(owner, key, cb.checked === (def === 'true') && key !== 'AutoSize' ? undefined : String(cb.checked)));
+                cb.addEventListener('change', () => setProp(owner, key, cb.checked === (def === 'true') && key !== 'AutoSize' ? undefined : lit(String(cb.checked))));
                 ed.appendChild(cb);
                 break;
             }
@@ -982,8 +1030,8 @@
             case 'ref': {
                 const s = document.createElement('select');
                 const cands = visibleControls().filter(c => /Button/.test(c.type));
-                s.innerHTML = '<option value="">(ninguno)</option>' + cands.map(c => `<option ${cur === 'this.' + c.name ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
-                s.addEventListener('change', () => setProp(owner, key, s.value ? 'this.' + s.value : undefined));
+                s.innerHTML = '<option value="">(ninguno)</option>' + cands.map(c => `<option ${cur && cur.toLowerCase() === (SELF() + '.' + c.name).toLowerCase() ? 'selected' : ''}>${esc(c.name)}</option>`).join('');
+                s.addEventListener('change', () => setProp(owner, key, s.value ? SELF() + '.' + s.value : undefined));
                 ed.appendChild(s);
                 break;
             }
@@ -998,7 +1046,7 @@
             }
             default: {
                 const i = input(cur ?? '', v => setProp(owner, key, v.trim() || undefined));
-                i.title = 'Expresión C# (se copia tal cual al Designer.cs)';
+                i.title = `Expresión ${LANG_NAME()} (se copia tal cual al Designer)`;
             }
         }
         return row;
@@ -1012,16 +1060,17 @@
             return;
         }
         const old = c.name;
-        const re = new RegExp(`\\bthis\\.${old}\\b`, 'g');
+        const re = selfRe(old);
         mutate(() => {
             c.name = newName;
             form.controls.forEach(o => {
                 if (o.parent === old) { o.parent = newName; }
-                o.extra = o.extra.map(x => x.replace(re, 'this.' + newName).replace(new RegExp(`^${old}\\.`), newName + '.'));
-                for (const k in o.props) { o.props[k] = o.props[k].replace(re, 'this.' + newName); }
+                o.extra = o.extra.map(x => x.replace(re, SELF() + '.' + newName).replace(new RegExp(`^${old}\\.`, VB ? 'i' : ''), newName + '.'));
+                for (const k in o.props) { o.props[k] = o.props[k].replace(re, SELF() + '.' + newName); }
             });
-            for (const k in form.props) { form.props[k] = form.props[k].replace(re, 'this.' + newName); }
-            form.extra = form.extra.map(x => x.replace(re, 'this.' + newName));
+            if (VB) { vscode.postMessage({ type: 'renamed', old, name: newName }); }
+            for (const k in form.props) { form.props[k] = form.props[k].replace(re, SELF() + '.' + newName); }
+            form.extra = form.extra.map(x => x.replace(re, SELF() + '.' + newName));
             sel = newName;
         });
     }
@@ -1031,8 +1080,8 @@
         const doomed = new Set([sel, ...descendants(sel)]);
         mutate(() => {
             form.controls = form.controls.filter(c => !doomed.has(c.name));
-            const refs = [...doomed].map(n => 'this.' + n);
-            for (const k in form.props) { if (refs.includes(form.props[k].trim())) { delete form.props[k]; } }
+            const refs = [...doomed].map(n => (SELF() + '.' + n).toLowerCase());
+            for (const k in form.props) { if (refs.includes(form.props[k].trim().toLowerCase())) { delete form.props[k]; } }
             sel = FORM;
         });
     }
@@ -1080,7 +1129,7 @@
             for (const [old, c] of added) {
                 if (map.has(c.parent)) { c.parent = map.get(c.parent); }
                 c.events = {};
-                c.extra = c.extra.map(x => x.replace(new RegExp(`\\bthis\\.${old}\\b`, 'g'), 'this.' + c.name));
+                c.extra = c.extra.map(x => x.replace(selfRe(old), SELF() + '.' + c.name));
                 if (decodeStr(c.props.Text) === old) { c.props.Text = encodeStr(c.name); }
             }
             // la copia principal va desplazada y al frente
@@ -1138,6 +1187,8 @@
         if (m.type === 'preview') { if (form) { setPreview(m.on); } else { pendingPreview = m.on; } return; }
         if (m.type === 'load') {
             form = m.form;
+            VB = form.lang === 'vb';
+            $('btnPreview').title = `Probar la interfaz: los controles responden, pero el código ${LANG_NAME()} no se ejecuta (Esc para salir)`;
             grid = m.gridSize || 4;
             if (sel !== FORM && !getCtl(sel)) { sel = FORM; }
             render();

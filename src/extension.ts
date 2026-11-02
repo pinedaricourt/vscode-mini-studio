@@ -200,7 +200,7 @@ export function activate(context: vscode.ExtensionContext) {
             file = proj ? mainFormOf(path.dirname(proj)) : undefined;
             if (!file) { vscode.window.showWarningMessage('Este proyecto no tiene formularios que simular.'); return; }
         }
-        if (!isFormFile(codeFileFor(file))) { vscode.window.showWarningMessage('El simulador funciona con formularios de Windows Forms (Form1.cs).'); return; }
+        if (!isFormFile(codeFileFor(file))) { vscode.window.showWarningMessage('El simulador funciona con formularios de Windows Forms (Form1.cs / Form1.vb).'); return; }
         DesignerPanel.open(context, codeFileFor(file), true);
     });
 
@@ -240,6 +240,10 @@ export function activate(context: vscode.ExtensionContext) {
     reg('miniStudio.addInterface', async (n?: Node) => {
         const p = await resolveProject(n);
         if (p) { await templates.addClass(p, folderOf(n, p), 'interface'); }
+    });
+    reg('miniStudio.addModule', async (n?: Node) => {
+        const p = await resolveProject(n);
+        if (p) { await templates.addClass(p, folderOf(n, p), 'module'); }
     });
     reg('miniStudio.addForm', async (n?: Node) => {
         const p = await resolveProject(n);
@@ -284,8 +288,8 @@ export function activate(context: vscode.ExtensionContext) {
     });
     reg('miniStudio.deleteItem', async (n?: Node) => {
         if (!n?.fsPath) { return; }
-        const related = n.kind === 'form' || /\.cs$/i.test(n.fsPath)
-            ? [n.fsPath.replace(/\.cs$/i, '.Designer.cs'), n.fsPath.replace(/\.cs$/i, '.resx')].filter(f => f !== n.fsPath && fs.existsSync(f))
+        const related = n.kind === 'form' || /\.(cs|vb)$/i.test(n.fsPath)
+            ? [n.fsPath.replace(/\.(cs|vb)$/i, '.Designer.$1'), n.fsPath.replace(/\.(cs|vb)$/i, '.resx')].filter(f => f !== n.fsPath && fs.existsSync(f))
             : [];
         const names = [n.fsPath, ...related].map(f => path.basename(f)).join(', ');
         const ok = await vscode.window.showWarningMessage(`¿Enviar a la papelera: ${names}?`, { modal: true }, 'Eliminar');
@@ -309,8 +313,9 @@ export function activate(context: vscode.ExtensionContext) {
 
 /** Formulario principal: el de Application.Run(new X()) en Program.cs, o el primero que haya. */
 function mainFormOf(dir: string): string | undefined {
-    const program = ['Program.cs'].map(f => path.join(dir, f)).find(f => fs.existsSync(f));
-    const m = program ? /Application\.Run\(\s*new\s+([\w.]+)\s*\(/.exec(fs.readFileSync(program, 'utf8')) : null;
+    const program = ['Program.cs', 'Program.vb'].map(f => path.join(dir, f)).find(f => fs.existsSync(f));
+    // C#: Application.Run(new Form1())  ·  VB: Application.Run(Form1) / Application.Run(New Form1)
+    const m = program ? /Application\.Run\(\s*(?:new\s+)?([\w.]+)\s*[()]/i.exec(fs.readFileSync(program, 'utf8')) : null;
     const forms: string[] = [];
     const walk = (d: string) => {
         for (const e of fs.readdirSync(d, { withFileTypes: true })) {
@@ -321,7 +326,7 @@ function mainFormOf(dir: string): string | undefined {
     };
     walk(dir);
     const wanted = m?.[1].split('.').pop();
-    return forms.find(f => path.basename(f, '.cs') === wanted) ?? forms[0];
+    return forms.find(f => path.basename(f).replace(/\.(cs|vb)$/i, '').toLowerCase() === wanted?.toLowerCase()) ?? forms[0];
 }
 
 export function deactivate() { /* nada */ }

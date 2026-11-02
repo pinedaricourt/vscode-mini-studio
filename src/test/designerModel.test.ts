@@ -1,6 +1,7 @@
 // Pruebas del lector/escritor de Designer.cs:  npm test
 import * as assert from 'assert';
 import { parseDesigner, generateDesigner, DControl } from '../designer/model';
+import { parseVbHandles } from '../designer/modelVb';
 
 const TEMPLATE = `﻿namespace WfTest;
 
@@ -150,6 +151,134 @@ test('ida y vuelta estable', () => {
     assert.ok(once.includes('this.Controls.Add(this.comboBox1);'));
     assert.ok(once.includes('this.timer1.Tick += new System.EventHandler(this.timer1_Tick);'));
     assert.ok(once.includes('private System.Windows.Forms.Timer timer1;'));
+});
+
+
+// Formato que genera Visual Studio para VB.NET
+const VB = `<Global.Microsoft.VisualBasic.CompilerServices.DesignerGenerated()> _
+Partial Class Form1
+    Inherits System.Windows.Forms.Form
+
+    <System.Diagnostics.DebuggerNonUserCode()> _
+    Protected Overrides Sub Dispose(ByVal disposing As Boolean)
+        MyBase.Dispose(disposing)
+    End Sub
+
+    Private components As System.ComponentModel.IContainer
+
+    <System.Diagnostics.DebuggerStepThrough()> _
+    Private Sub InitializeComponent()
+        Me.components = New System.ComponentModel.Container()
+        Me.Button1 = New System.Windows.Forms.Button()
+        Me.GroupBox1 = New System.Windows.Forms.GroupBox()
+        Me.CheckBox1 = New System.Windows.Forms.CheckBox()
+        Me.ComboBox1 = New System.Windows.Forms.ComboBox()
+        Me.Timer1 = New System.Windows.Forms.Timer(Me.components)
+        Me.GroupBox1.SuspendLayout()
+        Me.SuspendLayout()
+        '
+        'Button1
+        '
+        Me.Button1.Font = New System.Drawing.Font("Segoe UI", 12.0!, System.Drawing.FontStyle.Bold, System.Drawing.GraphicsUnit.Point, CType(0, Byte))
+        Me.Button1.Location = New System.Drawing.Point(12, 12)
+        Me.Button1.Name = "Button1"
+        Me.Button1.Size = New System.Drawing.Size(94, 29)
+        Me.Button1.TabIndex = 0
+        Me.Button1.Text = "Dijo ""hola"""
+        Me.Button1.UseVisualStyleBackColor = True
+        '
+        'GroupBox1
+        '
+        Me.GroupBox1.Controls.Add(Me.CheckBox1)
+        Me.GroupBox1.Location = New System.Drawing.Point(12, 60)
+        Me.GroupBox1.Name = "GroupBox1"
+        Me.GroupBox1.Size = New System.Drawing.Size(250, 125)
+        Me.GroupBox1.TabIndex = 1
+        Me.GroupBox1.TabStop = False
+        Me.GroupBox1.Text = "Opciones"
+        '
+        'CheckBox1
+        '
+        Me.CheckBox1.AutoSize = True
+        Me.CheckBox1.Location = New System.Drawing.Point(6, 26)
+        Me.CheckBox1.Name = "CheckBox1"
+        Me.CheckBox1.Size = New System.Drawing.Size(101, 24)
+        Me.CheckBox1.TabIndex = 0
+        Me.CheckBox1.Text = "CheckBox1"
+        '
+        'ComboBox1
+        '
+        Me.ComboBox1.FormattingEnabled = True
+        Me.ComboBox1.Items.AddRange(New Object() {"Uno", "Dos", _
+            "Tres"})
+        Me.ComboBox1.Location = New System.Drawing.Point(300, 12)
+        Me.ComboBox1.Name = "ComboBox1"
+        Me.ComboBox1.Size = New System.Drawing.Size(151, 28)
+        Me.ComboBox1.TabIndex = 2
+        '
+        'Timer1
+        '
+        Me.Timer1.Interval = 500
+        '
+        'Form1
+        '
+        Me.AutoScaleDimensions = New System.Drawing.SizeF(8.0!, 20.0!)
+        Me.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Font
+        Me.ClientSize = New System.Drawing.Size(800, 450)
+        Me.Controls.Add(Me.ComboBox1)
+        Me.Controls.Add(Me.GroupBox1)
+        Me.Controls.Add(Me.Button1)
+        Me.Name = "Form1"
+        Me.Text = "Principal"
+        Me.GroupBox1.ResumeLayout(False)
+        Me.GroupBox1.PerformLayout()
+        Me.ResumeLayout(False)
+    End Sub
+
+    Friend WithEvents Button1 As System.Windows.Forms.Button
+    Friend WithEvents GroupBox1 As GroupBox
+    Friend WithEvents CheckBox1 As System.Windows.Forms.CheckBox
+    Friend WithEvents ComboBox1 As System.Windows.Forms.ComboBox
+    Friend WithEvents Timer1 As System.Windows.Forms.Timer
+End Class
+`;
+
+test('VB: formato de Visual Studio', () => {
+    const f = parseDesigner(VB, 'vb');
+    assert.strictEqual(f.lang, 'vb');
+    assert.strictEqual(f.className, 'Form1');
+    assert.deepStrictEqual(f.controls.map(c => c.name), ['Button1', 'GroupBox1', 'CheckBox1', 'ComboBox1', 'Timer1']);
+    const get = (n: string) => f.controls.find(c => c.name === n) as DControl;
+    assert.strictEqual(get('Button1').props.Text, '"Dijo ""hola"""');
+    assert.strictEqual(get('GroupBox1').type, 'System.Windows.Forms.GroupBox');
+    assert.strictEqual(get('CheckBox1').parent, 'GroupBox1');
+    assert.strictEqual(get('Timer1').ctorArgs, 'Me.components');
+    assert.ok(get('ComboBox1').extra[0].includes('"Tres"'));
+    assert.strictEqual(f.props.Text, '"Principal"');
+});
+
+test('VB: ida y vuelta estable', () => {
+    const once = generateDesigner(parseDesigner(VB, 'vb'));
+    const twice = generateDesigner(parseDesigner(once, 'vb'));
+    assert.strictEqual(twice, once);
+    assert.ok(once.includes('Me.GroupBox1.Controls.Add(Me.CheckBox1)'));
+    assert.ok(once.includes('Friend WithEvents Timer1 As System.Windows.Forms.Timer'));
+    assert.ok(!once.includes(';'));
+});
+
+test('VB: eventos con Handles', () => {
+    const code = `Public Class Form1
+    Private Sub Button1_Click(sender As Object, e As EventArgs) Handles Button1.Click, Button2.Click
+    End Sub
+    Private Sub Form1_Load(sender As Object, e As EventArgs) _
+        Handles MyBase.Load
+    End Sub
+End Class`;
+    assert.deepStrictEqual(parseVbHandles(code), [
+        { owner: 'Button1', event: 'Click', handler: 'Button1_Click' },
+        { owner: 'Button2', event: 'Click', handler: 'Button1_Click' },
+        { owner: null, event: 'Load', handler: 'Form1_Load' },
+    ]);
 });
 
 if (process.argv[2]) {

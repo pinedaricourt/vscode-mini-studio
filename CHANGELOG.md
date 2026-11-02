@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.5.0
+
+- Visual Basic: diseñador de formularios para `Form1.vb` / `Form1.Designer.vb` (sintaxis de Visual Studio), eventos con `Handles` (crear, quitar y renombrar), Agregar clase/interfaz/módulo/formulario en VB, ejemplos en VB y elección de lenguaje para los ejemplos en la página de inicio.
+
 ## 0.4.0
 
 - Página de inicio estilo Visual Studio para crear programas: plantillas (consola, Windows Forms, biblioteca) y ejemplos listos para correr (Calculadora, Lista de tareas, Adivina el número, Tabla de multiplicar), con nombre, ubicación, versión de .NET y lenguaje. Recientes y abrir solución/carpeta.

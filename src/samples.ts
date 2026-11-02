@@ -23,18 +23,35 @@ export const SAMPLES: SampleInfo[] = [
     { id: 'tabla', title: 'Tabla de multiplicar', detail: 'Consola: for, formato de texto y validación de entrada.', template: 'console' },
 ];
 
-export function applySample(id: string, projectDir: string, ns: string) {
+export function applySample(id: string, projectDir: string, ns: string, lang: 'C#' | 'VB' = 'C#') {
+    const vb = lang === 'VB';
+    const program = path.join(projectDir, vb ? 'Program.vb' : 'Program.cs');
     switch (id) {
-        case 'calculadora': writeForm(projectDir, calculatorForm(ns), calculatorCode(ns)); break;
-        case 'tareas': writeForm(projectDir, tasksForm(ns), tasksCode(ns)); break;
-        case 'adivina': fs.writeFileSync(path.join(projectDir, 'Program.cs'), guessProgram(ns), 'utf8'); break;
-        case 'tabla': fs.writeFileSync(path.join(projectDir, 'Program.cs'), tableProgram(ns), 'utf8'); break;
+        case 'calculadora': writeForm(projectDir, calculatorForm(ns), vb ? calculatorVb() : calculatorCode(ns), vb); break;
+        case 'tareas': writeForm(projectDir, tasksForm(ns), vb ? tasksVb() : tasksCode(ns), vb); break;
+        case 'adivina': fs.writeFileSync(program, vb ? guessVb() : guessProgram(ns), 'utf8'); break;
+        case 'tabla': fs.writeFileSync(program, vb ? tableVb() : tableProgram(ns), 'utf8'); break;
     }
 }
 
-function writeForm(dir: string, form: DForm, code: string) {
-    fs.writeFileSync(path.join(dir, 'Form1.Designer.cs'), generateDesigner(form), 'utf8');
-    fs.writeFileSync(path.join(dir, 'Form1.cs'), code, 'utf8');
+function writeForm(dir: string, form: DForm, code: string, vb: boolean) {
+    const f = vb ? toVb(form) : form;
+    fs.writeFileSync(path.join(dir, vb ? 'Form1.Designer.vb' : 'Form1.Designer.cs'), generateDesigner(f), 'utf8');
+    fs.writeFileSync(path.join(dir, vb ? 'Form1.vb' : 'Form1.cs'), code, 'utf8');
+}
+
+/**
+ * Pasa a VB las expresiones de los formularios de ejemplo (solo las formas que usan estos ejemplos:
+ * new, true/false, 8F, this.). En VB los eventos van con Handles en el código, no en el Designer.
+ */
+function toVb(form: DForm): DForm {
+    const conv = (e: string) => e.replace(/\bnew\b/g, 'New').replace(/\btrue\b/g, 'True').replace(/\bfalse\b/g, 'False')
+        .replace(/\bthis\./g, 'Me.').replace(/\b(\d+)F\b/g, '$1.0!');
+    const props = (p: Record<string, string>) => Object.fromEntries(Object.entries(p).map(([k, v]) => [k, conv(v)]));
+    return {
+        ...form, lang: 'vb', namespace: '', props: props(form.props), events: {},
+        controls: form.controls.map(c => ({ ...c, modifier: 'Friend', props: props(c.props), events: {} })),
+    };
 }
 
 // ---------------------------------------------------------------- helpers de formulario
@@ -294,5 +311,151 @@ namespace ${ns}
         }
     }
 }
+`;
+}
+
+// ---------------------------------------------------------------- Visual Basic
+
+function calculatorVb(): string {
+    const digits = [...Array(10).keys()].map(d => `btn${d}.Click`).join(', ');
+    return `Public Class Form1
+    Private acumulado As Double
+    Private operador As String = ""
+    Private nuevoNumero As Boolean = True
+
+    Private Sub Digito_Click(sender As Object, e As EventArgs) Handles ${digits}
+        Dim digito = DirectCast(sender, Button).Text
+        If nuevoNumero OrElse txtPantalla.Text = "0" Then
+            txtPantalla.Text = digito
+            nuevoNumero = False
+        Else
+            txtPantalla.Text &= digito
+        End If
+    End Sub
+
+    Private Sub Operador_Click(sender As Object, e As EventArgs) Handles btnSumar.Click, btnRestar.Click, btnMultiplicar.Click, btnDividir.Click
+        Calcular()
+        operador = DirectCast(sender, Button).Text
+        nuevoNumero = True
+    End Sub
+
+    Private Sub Igual_Click(sender As Object, e As EventArgs) Handles btnIgual.Click
+        Calcular()
+        operador = ""
+        nuevoNumero = True
+    End Sub
+
+    Private Sub Limpiar_Click(sender As Object, e As EventArgs) Handles btnLimpiar.Click
+        acumulado = 0
+        operador = ""
+        txtPantalla.Text = "0"
+        nuevoNumero = True
+    End Sub
+
+    Private Sub Calcular()
+        Dim actual = Double.Parse(txtPantalla.Text)
+        Select Case operador
+            Case "+" : acumulado += actual
+            Case "-" : acumulado -= actual
+            Case "*" : acumulado *= actual
+            Case "/"
+                If actual = 0 Then
+                    MessageBox.Show("No se puede dividir entre cero.", "Calculadora", MessageBoxButtons.OK, MessageBoxIcon.Warning)
+                    Return
+                End If
+                acumulado /= actual
+            Case Else : acumulado = actual
+        End Select
+        txtPantalla.Text = acumulado.ToString()
+    End Sub
+
+End Class
+`;
+}
+
+function tasksVb(): string {
+    return `Public Class Form1
+
+    Private Sub btnAgregar_Click(sender As Object, e As EventArgs) Handles btnAgregar.Click
+        Dim tarea = txtTarea.Text.Trim()
+        If tarea.Length = 0 Then
+            MessageBox.Show("Escribe una tarea primero.", "Lista de tareas")
+            Return
+        End If
+        lstTareas.Items.Add(tarea)
+        txtTarea.Clear()
+        txtTarea.Focus()
+        ActualizarContador()
+    End Sub
+
+    Private Sub btnEliminar_Click(sender As Object, e As EventArgs) Handles btnEliminar.Click
+        If lstTareas.SelectedIndex >= 0 Then
+            lstTareas.Items.RemoveAt(lstTareas.SelectedIndex)
+            ActualizarContador()
+        End If
+    End Sub
+
+    Private Sub lstTareas_SelectedIndexChanged(sender As Object, e As EventArgs) Handles lstTareas.SelectedIndexChanged
+        btnEliminar.Enabled = lstTareas.SelectedIndex >= 0
+    End Sub
+
+    Private Sub ActualizarContador()
+        Dim n = lstTareas.Items.Count
+        lblContador.Text = If(n = 1, "1 tarea", n & " tareas")
+    End Sub
+
+End Class
+`;
+}
+
+function guessVb(): string {
+    return `Imports System
+
+Module Program
+    Sub Main(args As String())
+        Dim azar As New Random()
+        Dim secreto = azar.Next(1, 101)
+        Dim intentos = 0
+
+        Console.WriteLine("Estoy pensando en un número del 1 al 100. ¡Adivínalo!")
+        Do
+            Console.Write("Tu número: ")
+            Dim n As Integer
+            If Not Integer.TryParse(Console.ReadLine(), n) Then
+                Console.WriteLine("Eso no es un número.")
+                Continue Do
+            End If
+            intentos += 1
+            If n < secreto Then
+                Console.WriteLine("Más alto...")
+            ElseIf n > secreto Then
+                Console.WriteLine("Más bajo...")
+            Else
+                Console.WriteLine($"¡Correcto! Lo lograste en {intentos} intentos.")
+                Exit Do
+            End If
+        Loop
+    End Sub
+End Module
+`;
+}
+
+function tableVb(): string {
+    return `Imports System
+
+Module Program
+    Sub Main(args As String())
+        Dim numero As Integer
+        Console.Write("¿Qué tabla quieres ver? ")
+        While Not Integer.TryParse(Console.ReadLine(), numero)
+            Console.Write("Escribe un número entero: ")
+        End While
+
+        Console.WriteLine()
+        For i = 1 To 12
+            Console.WriteLine($"{numero,3} x {i,2} = {numero * i,5}")
+        Next
+    End Sub
+End Module
 `;
 }

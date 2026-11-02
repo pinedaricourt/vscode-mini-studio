@@ -245,20 +245,21 @@ export function runsAs32Bit(file: string): boolean | undefined {
 
 /** True si X.cs es un formulario (tiene X.Designer.cs al lado). */
 export function isFormFile(file: string): boolean {
-    if (!/\.cs$/i.test(file) || /\.Designer\.cs$/i.test(file)) { return false; }
-    const designer = file.replace(/\.cs$/i, '.Designer.cs');
+    if (!/\.(cs|vb)$/i.test(file) || /\.Designer\.(cs|vb)$/i.test(file)) { return false; }
+    const designer = designerFileFor(file);
     if (!fs.existsSync(designer)) { return false; }
     try {
-        return /\bInitializeComponent\s*\(/.test(fs.readFileSync(designer, 'utf8'));
+        return /\bInitializeComponent\s*\(/i.test(fs.readFileSync(designer, 'utf8'));
     } catch { return false; }
 }
 
+/** Form1.cs → Form1.Designer.cs  ·  Form1.vb → Form1.Designer.vb */
 export function designerFileFor(file: string): string {
-    return /\.Designer\.cs$/i.test(file) ? file : file.replace(/\.cs$/i, '.Designer.cs');
+    return /\.Designer\.(cs|vb)$/i.test(file) ? file : file.replace(/\.(cs|vb)$/i, '.Designer.$1');
 }
 
 export function codeFileFor(file: string): string {
-    return file.replace(/\.Designer\.cs$/i, '.cs');
+    return file.replace(/\.Designer\.(cs|vb)$/i, '.$1');
 }
 
 /** Ruta de un ejecutable en el PATH (o undefined). */

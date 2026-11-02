@@ -1,7 +1,7 @@
 # Mini Studio para .NET
 
 Extensión de VS Code que lo convierte en un **mini Visual Studio Community** para crear, compilar, ejecutar y depurar
-**aplicaciones de consola** y **Windows Forms** en C# (y proyectos VB.NET para compilar/ejecutar).
+**aplicaciones de consola** y **Windows Forms** en **C# y Visual Basic**.
 
 ## Funciones
 
@@ -15,9 +15,17 @@ Extensión de VS Code que lo convierte en un **mini Visual Studio Community** pa
 | Iniciar sin depurar (Ctrl+F5) | Consola en la terminal integrada (o en una ventana aparte que espera una tecla, como VS); WinForms se lanza como proceso |
 | Iniciar depuración (F5) | Depurador `coreclr` de la extensión C# de Microsoft (te ofrece instalarla si falta) |
 | Detener (Shift+F5) | Cierra la app en ejecución |
-| Agregar → Clase / Interfaz / Windows Form / Carpeta | Clic derecho en un proyecto o carpeta; el espacio de nombres se calcula según la carpeta |
+| Agregar → Clase / Interfaz / Módulo (VB) / Windows Form / Carpeta | Clic derecho en un proyecto o carpeta; el espacio de nombres se calcula según la carpeta |
 | Administrar paquetes NuGet | *Agregar paquete NuGet...* (`Id` o `Id@versión`) y quitar desde Dependencias |
 | Diseñador de Windows Forms | Al abrir un formulario (desde cualquier explorador) sale el **diseñador**, como en VS. Ver código con **F7**; volver al diseño con **Shift+F7** |
+
+### Visual Basic
+
+Todo funciona igual en VB.NET: plantillas y ejemplos (elige *Visual Basic* en la página de inicio), Agregar clase,
+interfaz, **módulo** y formulario, y el diseñador con `Form1.vb` + `Form1.Designer.vb`, escrito con la misma sintaxis
+que Visual Studio (`Me.`, `New`, `True`, `Friend WithEvents`). Los eventos se manejan como en VB: doble clic en un
+control crea `Private Sub Button1_Click(...) Handles Button1.Click`; quitar el evento o renombrar el control actualiza
+el `Handles`.
 
 ### Simulador
 
@@ -63,7 +71,7 @@ interfaz en cualquier sistema operativo. **Esc** para salir.
 Descarga el `.vsix` de [Releases](https://github.com/pinedaricourt/vscode-mini-studio/releases) e instálalo:
 
 ```bash
-code --install-extension mini-studio-0.4.0.vsix
+code --install-extension mini-studio-0.5.0.vsix
 ```
 
 O desde el código fuente:
@@ -100,7 +108,6 @@ Pulsa F5 en VS Code con esta carpeta abierta para lanzar una ventana de prueba c
 
 - El diseñador regenera `InitializeComponent`; no edita recursos `.resx` (imágenes) ni TabControl/MenuStrip visualmente
   (se conservan si ya existen).
-- Formularios en VB.NET se compilan y ejecutan, pero no se abren en el diseñador.
 
 ## Licencia
 

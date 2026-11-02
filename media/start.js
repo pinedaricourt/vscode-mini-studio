@@ -19,8 +19,8 @@
     function allItems() {
         const samples = state.samples.map(s => ({
             key: 'sample:' + s.id, template: s.template, sample: s.id, icon: s.template === 'winforms' ? '🧮' : '🎲',
-            title: s.title, detail: s.detail, tags: ['C#', 'Ejemplo', s.template === 'winforms' ? 'Escritorio' : 'Consola'],
-            cat: 'ejemplos', langs: false, def: s.title.replace(/[^A-Za-z0-9]/g, ''),
+            title: s.title, detail: s.detail, tags: ['C#', 'VB', 'Ejemplo', s.template === 'winforms' ? 'Escritorio' : 'Consola'],
+            cat: 'ejemplos', langs: true, def: s.title.replace(/[^A-Za-z0-9]/g, ''),
         }));
         return [...TEMPLATES, ...samples];
     }

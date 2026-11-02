@@ -1,3 +1,4 @@
+import { parseVbDesigner, generateVbDesigner } from './modelVb';
 /*
  * Lectura y escritura de X.Designer.cs (InitializeComponent).
  *
@@ -18,6 +19,8 @@ export interface DControl {
 }
 
 export interface DForm {
+    lang?: 'cs' | 'vb';            // por defecto C#
+    vbInherits?: string;           // VB: línea Inherits del Designer.vb
     namespace: string;
     fileScoped: boolean;
     preamble: string;              // usings y comentarios antes de 'namespace'
@@ -37,7 +40,7 @@ export const WINFORMS_TYPES = [
 ];
 
 /** Tipos que el diseñador de VS envuelve en BeginInit/EndInit. */
-const SUPPORT_INITIALIZE = new Set(['DataGridView', 'PictureBox', 'NumericUpDown', 'TrackBar', 'SplitContainer', 'ErrorProvider']);
+export const SUPPORT_INITIALIZE = new Set(['DataGridView', 'PictureBox', 'NumericUpDown', 'TrackBar', 'SplitContainer', 'ErrorProvider']);
 export const CONTAINER_TYPES = new Set(['Panel', 'GroupBox', 'FlowLayoutPanel', 'TableLayoutPanel', 'TabPage', 'SplitContainer']);
 
 export function shortType(t: string): string {
@@ -135,7 +138,8 @@ function splitStatements(body: string): string[] {
 // Lectura
 // ---------------------------------------------------------------------------
 
-export function parseDesigner(text: string): DForm {
+export function parseDesigner(text: string, lang: 'cs' | 'vb' = 'cs'): DForm {
+    if (lang === 'vb') { return parseVbDesigner(text); }
     const nsMatch = /^\s*namespace\s+([\w.]+)\s*(;|\{)?/m.exec(text);
     const namespace = nsMatch?.[1] ?? 'WinFormsApp';
     const fileScoped = nsMatch?.[2] === ';';
@@ -220,6 +224,7 @@ function handlerName(expr: string): string {
 // ---------------------------------------------------------------------------
 
 export function generateDesigner(form: DForm): string {
+    if (form.lang === 'vb') { return generateVbDesigner(form); }
     const ind = form.fileScoped ? '' : '    ';
     const I2 = ind + '    ', I3 = ind + '        ';
     const visible = form.controls.filter(c => !c.extra.includes('__fieldOnly'));
