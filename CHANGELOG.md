@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.5.1
+
+- Primera publicación en el Marketplace de Visual Studio: descripción, categorías y página de la extensión.
+
 ## 0.5.0
 
 - Visual Basic: diseñador de formularios para `Form1.vb` / `Form1.Designer.vb` (sintaxis de Visual Studio), eventos con `Handles` (crear, quitar y renombrar), Agregar clase/interfaz/módulo/formulario en VB, ejemplos en VB y elección de lenguaje para los ejemplos en la página de inicio.

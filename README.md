@@ -1,7 +1,9 @@
 # Mini Studio para .NET
 
-Extensión de VS Code que lo convierte en un **mini Visual Studio Community** para crear, compilar, ejecutar y depurar
+Extensión de VS Code con un entorno **estilo Visual Studio** para crear, compilar, ejecutar y depurar
 **aplicaciones de consola** y **Windows Forms** en **C# y Visual Basic**.
+
+> Proyecto independiente: no está afiliado ni respaldado por Microsoft. Visual Studio, Visual Basic y Windows son marcas de Microsoft.
 
 ## Funciones
 
@@ -68,18 +70,14 @@ interfaz en cualquier sistema operativo. **Esc** para salir.
 
 ## Instalación
 
-Descarga el `.vsix` de [Releases](https://github.com/pinedaricourt/vscode-mini-studio/releases) e instálalo:
+Desde VS Code: abre **Extensiones** (Ctrl+Shift+X), busca **Mini Studio para .NET** e instala. O en la paleta (Ctrl+P):
 
-```bash
-code --install-extension mini-studio-0.5.0.vsix
+```
+ext install pinedaricourt.mini-studio
 ```
 
-O desde el código fuente:
-
-```bash
-npm install
-npm run package
-```
+También puedes descargar el `.vsix` de [Releases](https://github.com/pinedaricourt/vscode-mini-studio/releases) e instalarlo con
+`code --install-extension mini-studio-<versión>.vsix`.
 
 ## Desarrollo
 
