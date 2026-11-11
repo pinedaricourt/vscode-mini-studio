@@ -73,7 +73,7 @@ interfaz en cualquier sistema operativo. **Esc** para salir.
 Desde VS Code: abre **Extensiones** (Ctrl+Shift+X), busca **Mini Studio para .NET** e instala. O en la paleta (Ctrl+P):
 
 ```
-ext install pinedaricourt.mini-studio
+ext install ManuelPinedaRicourt.mini-studio
 ```
 
 También puedes descargar el `.vsix` de [Releases](https://github.com/pinedaricourt/vscode-mini-studio/releases) e instalarlo con

@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.5.2
+
+- Publisher del Marketplace: ManuelPinedaRicourt.
+
 ## 0.5.1
 
 - Primera publicación en el Marketplace de Visual Studio: descripción, categorías y página de la extensión.
