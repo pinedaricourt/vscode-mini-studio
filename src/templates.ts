@@ -55,13 +55,110 @@ export async function createProject(o: CreateOptions, output: vscode.OutputChann
     const projFile = path.join(projectDir, o.name + (o.lang === 'VB' ? '.vbproj' : '.csproj'));
 
     output.appendLine(`> dotnet ${args.join(' ')}`);
-    output.appendLine(await exec('dotnet', args, path.dirname(projectDir)));
+    try {
+        output.appendLine(await exec('dotnet', args, path.dirname(projectDir)));
+    } catch (e) {
+        // En Linux/macOS el SDK no trae la plantilla 'winforms' (solo viene en el SDK de Windows):
+        // se crea el proyecto con los mismos archivos que genera la plantilla.
+        if (o.template !== 'winforms' || !/No templates|103/i.test((e as Error).message)) { throw e; }
+        output.appendLine('La plantilla winforms no está instalada en este SDK; se crea el proyecto directamente.');
+        writeWinFormsProject(projectDir, o.name, o.lang, o.framework ?? (await installedFrameworks())[0] ?? 'net8.0');
+    }
     if (!fs.existsSync(slnFile)) {
         output.appendLine(await exec('dotnet', ['new', 'sln', '-n', path.basename(slnFile, '.sln'), '-o', path.dirname(slnFile)], path.dirname(slnFile)));
     }
     output.appendLine(await exec('dotnet', ['sln', slnFile, 'add', projFile], path.dirname(slnFile)));
     if (o.sample) { applySample(o.sample, projectDir, toIdentifier(o.name, true), o.lang); }
     return projFile;
+}
+
+/**
+ * Proyecto Windows Forms equivalente al de 'dotnet new winforms' (C# o VB), para cuando la plantilla no existe.
+ * Lleva EnableWindowsTargeting para que también compile fuera de Windows.
+ */
+export function writeWinFormsProject(dir: string, name: string, lang: 'C#' | 'VB', framework: string) {
+    const tfm = framework.replace(/-windows$/i, '') + '-windows';
+    const ns = toIdentifier(name, true);
+    fs.mkdirSync(dir, { recursive: true });
+    if (lang === 'VB') {
+        fs.writeFileSync(path.join(dir, `${name}.vbproj`), `<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>${tfm}</TargetFramework>
+    <RootNamespace>${ns}</RootNamespace>
+    <StartupObject>Sub Main</StartupObject>
+    <UseWindowsForms>true</UseWindowsForms>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Import Include="System.Data" />
+    <Import Include="System.Drawing" />
+    <Import Include="System.Windows.Forms" />
+  </ItemGroup>
+
+</Project>
+`, 'utf8');
+        fs.writeFileSync(path.join(dir, 'Program.vb'), `Friend Module Program
+
+    <STAThread()>
+    Friend Sub Main(args As String())
+        Application.SetHighDpiMode(HighDpiMode.SystemAware)
+        Application.EnableVisualStyles()
+        Application.SetCompatibleTextRenderingDefault(False)
+        Application.Run(New Form1)
+    End Sub
+
+End Module
+`, 'utf8');
+        fs.writeFileSync(path.join(dir, 'Form1.vb'), 'Public Class Form1\n\nEnd Class\n', 'utf8');
+        fs.writeFileSync(path.join(dir, 'Form1.Designer.vb'), emptyVbDesigner('Form1'), 'utf8');
+        return;
+    }
+    fs.writeFileSync(path.join(dir, `${name}.csproj`), `<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>${tfm}</TargetFramework>
+    <Nullable>enable</Nullable>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <EnableWindowsTargeting>true</EnableWindowsTargeting>
+  </PropertyGroup>
+
+</Project>
+`, 'utf8');
+    fs.writeFileSync(path.join(dir, 'Program.cs'), `namespace ${ns}
+{
+    internal static class Program
+    {
+        /// <summary>
+        ///  The main entry point for the application.
+        /// </summary>
+        [STAThread]
+        static void Main()
+        {
+            Application.SetHighDpiMode(HighDpiMode.SystemAware);
+            Application.EnableVisualStyles();
+            Application.SetCompatibleTextRenderingDefault(false);
+            Application.Run(new Form1());
+        }
+    }
+}
+`, 'utf8');
+    fs.writeFileSync(path.join(dir, 'Form1.cs'), `namespace ${ns}
+{
+    public partial class Form1 : Form
+    {
+        public Form1()
+        {
+            InitializeComponent();
+        }
+    }
+}
+`, 'utf8');
+    fs.writeFileSync(path.join(dir, 'Form1.Designer.cs'), emptyDesigner(ns, 'Form1'), 'utf8');
 }
 
 /** Versiones de .NET instaladas (net8.0, net9.0...), de la más nueva a la más vieja. */

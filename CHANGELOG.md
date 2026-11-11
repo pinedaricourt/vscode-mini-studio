@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.5.4
+
+- Linux/macOS: el SDK no trae la plantilla winforms; ahora Mini Studio crea el proyecto Windows Forms (C# y VB, y los ejemplos) por su cuenta, con EnableWindowsTargeting.
+
 ## 0.5.3
 
 - Linux: si el `dotnet` del PATH está roto (error de libhostfxr / host/fxr), se busca otra instalación que funcione (~/.dotnet, /usr/share/dotnet...) y se explica cómo repararlo. Nuevo ajuste `miniStudio.dotnetPath`.
