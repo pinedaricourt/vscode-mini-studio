@@ -8,6 +8,7 @@ import { Runner } from './runner';
 import * as templates from './templates';
 import { DesignerPanel } from './designer/designerPanel';
 import { StartPage } from './startPage';
+import { warnIfDotnetBroken } from './dotnet';
 import { allowCode, registerOpenByDefault } from './designer/openByDefault';
 
 const CONFIGS = ['Debug', 'Release'];
@@ -300,6 +301,8 @@ export function activate(context: vscode.ExtensionContext) {
         await refresh();
     });
 
+    // comprobar el SDK de .NET sin frenar la activación (en Linux puede estar roto: libhostfxr)
+    setTimeout(() => { warnIfDotnetBroken(); }, 1500);
     refresh().then(async () => {
         // proyecto recién creado desde la página de inicio: abrir su archivo principal
         const pending = StartPage.takePendingFile(context);

@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import { spawn, ChildProcess, execFile } from 'child_process';
 import { ProjectInfo, getTargetInfo, TargetInfo, isLegacyProject, isWindowsDesktop, which } from './projects';
+import { dotnetCmd, dotnetEnv } from './dotnet';
 
 /** Lanza y detiene la app del proyecto de inicio (sin depurador o con el depurador de C#). */
 export class Runner {
@@ -72,7 +73,7 @@ export class Runner {
                 this.startExternalConsole(p, cmd, args);
                 return;
             }
-            this.terminal = vscode.window.createTerminal({ name: `▶ ${p.name}`, shellPath: cmd, shellArgs: args, cwd: p.dir, iconPath: new vscode.ThemeIcon('run') });
+            this.terminal = vscode.window.createTerminal({ name: `▶ ${p.name}`, shellPath: cmd, shellArgs: args, cwd: p.dir, env: dotnetEnv(), iconPath: new vscode.ThemeIcon('run') });
             this.terminal.show();
             this.fire();
             return;
@@ -81,7 +82,7 @@ export class Runner {
         // Windows Forms / WinExe: se lanza como proceso y su salida va al canal de salida
         this.output.clear();
         this.output.appendLine(`> ${cmd} ${args.join(' ')}`);
-        const child = spawn(cmd, args, { cwd: p.dir });
+        const child = spawn(cmd, args, { cwd: p.dir, env: dotnetEnv() });
         this.child = child;
         child.stdout?.on('data', (d: Buffer) => this.output.append(d.toString('utf8')));
         child.stderr?.on('data', (d: Buffer) => { this.output.append(d.toString('utf8')); this.output.show(true); });
@@ -166,5 +167,5 @@ function foreignLauncher(p: ProjectInfo, info: TargetInfo): { cmd: string; args:
 
 function launchCommand(targetPath: string): { cmd: string; args: string[] } {
     // En .NET (Core/5+) TargetPath es el .dll; en .NET Framework es el .exe
-    return /\.dll$/i.test(targetPath) ? { cmd: 'dotnet', args: [targetPath] } : { cmd: targetPath, args: [] };
+    return /\.dll$/i.test(targetPath) ? { cmd: dotnetCmd(), args: [targetPath] } : { cmd: targetPath, args: [] };
 }

@@ -2,7 +2,7 @@
   "name": "mini-studio",
   "displayName": "Mini Studio para .NET",
   "description": "Entorno estilo Visual Studio para .NET: explorador de soluciones, compilar, ejecutar y depurar apps de consola y Windows Forms en C# y Visual Basic, plantillas, ejemplos y diseñador visual de formularios.",
-  "version": "0.5.2",
+  "version": "0.5.3",
   "publisher": "ManuelPinedaRicourt",
   "license": "MIT",
   "pricing": "Free",
@@ -499,6 +499,11 @@
     "configuration": {
       "title": "Mini Studio",
       "properties": {
+        "miniStudio.dotnetPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Ruta al ejecutable `dotnet` (por ejemplo `~/.dotnet/dotnet` o `/usr/share/dotnet/dotnet`). Vacío = se busca uno que funcione: primero el del PATH y luego las ubicaciones habituales."
+        },
         "miniStudio.console.runIn": {
           "type": "string",
           "enum": [

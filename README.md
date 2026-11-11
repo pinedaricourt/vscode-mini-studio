@@ -43,6 +43,11 @@ interfaz en cualquier sistema operativo. **Esc** para salir.
   Ctrl+F5 las ejecuta con Wine (se compilan autocontenidas para win-x64, así que Wine no necesita tener .NET).
   Sin Wine, se ofrece el simulador. No se pueden depurar con F5 fuera de Windows.
 - Proyectos clásicos de .NET Framework: con **Mono** (`msbuild` + `mono`) si está instalado.
+- Si `dotnet` falla con *"[/usr/lib/dotnet/host/fxr] does not exist ... libhostfxr.so"*, la instalación de .NET está
+  incompleta o mezclada (paquetes de Ubuntu + Microsoft). Mini Studio busca otro `dotnet` que funcione (`~/.dotnet`,
+  `/usr/share/dotnet`...) y, si no hay, te dice cómo arreglarlo:
+  `sudo apt remove 'dotnet*' 'aspnetcore*' 'netstandard*' && sudo apt install dotnet-sdk-8.0`.
+  También puedes fijar la ruta en el ajuste `miniStudio.dotnetPath`.
 
 ### Diseñador de formularios
 
@@ -94,6 +99,7 @@ Pulsa F5 en VS Code con esta carpeta abierta para lanzar una ventana de prueba c
 
 | Ajuste | Por defecto | Descripción |
 |---|---|---|
+| `miniStudio.dotnetPath` | (vacío) | Ruta al `dotnet` a usar; vacío = se busca uno que funcione |
 | `miniStudio.console.runIn` | `integratedTerminal` | `externalWindow` abre una consola aparte que espera una tecla al terminar |
 | `miniStudio.build.verbosity` | `minimal` | Detalle de `dotnet build` |
 | `miniStudio.build.msbuildPath` | (vacío) | MSBuild.exe para proyectos .NET Framework; vacío = se busca con vswhere |

@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
 import { execFile, execFileSync } from 'child_process';
+import { dotnetCmd, dotnetEnv, explainDotnetError } from './dotnet';
 
 export interface ProjectInfo {
     name: string;
@@ -200,10 +201,10 @@ export async function getTargetInfo(p: ProjectInfo, configuration: string, props
     if (cached && cached.mtime === mtime) { return cached.info; }
 
     const vs = isLegacyProject(p.file) ? findVsMsbuild() : undefined;
-    const [cmd, pre] = vs ? [vs, []] : ['dotnet', ['msbuild']];
+    const [cmd, pre] = vs ? [vs, []] : [dotnetCmd(), ['msbuild']];
     const stdout = await new Promise<string>((resolve, reject) => {
         execFile(cmd, [...pre, p.file, '-nologo', '-getProperty:TargetPath', '-getProperty:OutputType', `-p:Configuration=${configuration}`, ...props.map(x => `-p:${x}`)],
-            { cwd: p.dir, windowsHide: true }, (err, out, errOut) => err ? reject(new Error(errOut || out || err.message)) : resolve(out));
+            { cwd: p.dir, windowsHide: true, env: dotnetEnv() }, (err, out, errOut) => err ? reject(new Error(explainDotnetError(errOut || out || err.message))) : resolve(out));
     });
     const json = JSON.parse(stdout);
     const info: TargetInfo = { targetPath: json.Properties.TargetPath, outputType: json.Properties.OutputType };

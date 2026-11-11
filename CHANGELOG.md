@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.5.3
+
+- Linux: si el `dotnet` del PATH está roto (error de libhostfxr / host/fxr), se busca otra instalación que funcione (~/.dotnet, /usr/share/dotnet...) y se explica cómo repararlo. Nuevo ajuste `miniStudio.dotnetPath`.
+
 ## 0.5.2
 
 - Publisher del Marketplace: ManuelPinedaRicourt.

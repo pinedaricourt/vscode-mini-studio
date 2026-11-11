@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import * as path from 'path';
 import { spawn } from 'child_process';
 import { needsVsMsbuild, findVsMsbuild } from './projects';
+import { dotnetCmd, dotnetEnv, explainDotnetError } from './dotnet';
 
 export type BuildKind = 'build' | 'rebuild' | 'clean';
 
@@ -40,7 +41,7 @@ export class Builder {
         // Los proyectos clásicos de .NET Framework (sin Sdk="...") no compilan bien con 'dotnet build'
         // (p. ej. MSB4216 al generar los .resx): se usa el MSBuild de Visual Studio si está instalado.
         const verbosity = `-v:${cfg.get<string>('build.verbosity', 'minimal')}`;
-        let cmd = 'dotnet';
+        let cmd = dotnetCmd();
         let args: string[];
         const vs = needsVsMsbuild(target) ? findVsMsbuild() : undefined;
         if (vs) {
@@ -63,8 +64,10 @@ export class Builder {
         const byFile = new Map<string, vscode.Diagnostic[]>();
         const seen = new Set<string>();
         let errors = 0, warnings = 0;
+        let brokenDotnet = '';
         const handleLine = (line: string) => {
             this.output.appendLine(line);
+            if (/hostfxr|host[\\/]fxr/i.test(line)) { brokenDotnet = line; }
             const d = parseDiagnostic(line, path.dirname(target));
             if (!d) { return; }
             const key = `${d.file}|${d.diag.range.start.line}|${d.diag.range.start.character}|${d.diag.code}|${d.diag.message}`;
@@ -78,7 +81,7 @@ export class Builder {
         };
 
         const code = await new Promise<number>(resolve => {
-            const child = spawn(cmd, args, { cwd: path.dirname(target), windowsHide: true, env: { ...process.env, DOTNET_CLI_UI_LANGUAGE: process.env.DOTNET_CLI_UI_LANGUAGE ?? 'es' } });
+            const child = spawn(cmd, args, { cwd: path.dirname(target), windowsHide: true, env: dotnetEnv({ DOTNET_CLI_UI_LANGUAGE: process.env.DOTNET_CLI_UI_LANGUAGE ?? 'es' }) });
             const pipe = (stream: NodeJS.ReadableStream) => {
                 let buf = '';
                 stream.on('data', (chunk: Buffer) => {
@@ -92,12 +95,18 @@ export class Builder {
             pipe(child.stdout);
             pipe(child.stderr);
             child.on('error', err => {
-                this.output.appendLine(`No se pudo ejecutar '${cmd}': ${err.message}. ¿Está instalado el SDK de .NET?`);
+                this.output.appendLine(explainDotnetError(`No se pudo ejecutar '${cmd}': ${err.message}`));
                 resolve(-1);
             });
             child.on('close', c => resolve(c ?? -1));
         });
 
+        if (brokenDotnet) {
+            const msg = explainDotnetError(brokenDotnet);
+            this.output.appendLine('');
+            this.output.appendLine(msg);
+            vscode.window.showErrorMessage(msg.split('\n')[0]);
+        }
         const secs = ((Date.now() - started) / 1000).toFixed(1);
         const ok = code === 0 && errors === 0;
         this.output.appendLine('');

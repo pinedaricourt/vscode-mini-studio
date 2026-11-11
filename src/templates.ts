@@ -4,12 +4,15 @@ import * as fs from 'fs';
 import { execFile } from 'child_process';
 import { Workspace, ProjectInfo, namespaceFor, readCsproj, toIdentifier } from './projects';
 import { applySample } from './samples';
+import { dotnetCmd, dotnetEnv, explainDotnetError } from './dotnet';
 import { generateDesigner } from './designer/model';
 
 export function exec(cmd: string, args: string[], cwd: string): Promise<string> {
+    // 'dotnet' se resuelve a la instalación que funciona (ver dotnet.ts) y sus errores se explican
+    const isDotnet = cmd === 'dotnet';
     return new Promise((resolve, reject) => {
-        execFile(cmd, args, { cwd, windowsHide: true }, (err, out, errOut) =>
-            err ? reject(new Error((errOut || out || err.message).trim())) : resolve(out));
+        execFile(isDotnet ? dotnetCmd() : cmd, args, { cwd, windowsHide: true, env: isDotnet ? dotnetEnv() : process.env }, (err, out, errOut) =>
+            err ? reject(new Error(isDotnet ? explainDotnetError((errOut || out || err.message).trim()) : (errOut || out || err.message).trim())) : resolve(out));
     });
 }
 
