@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.5.7
+
+- Documentación en español, inglés y portugués (`docs/`). Nuevo comando **Mini Studio: Documentación** (también en el menú ⋯ del Explorador de soluciones) que la abre en el idioma de VS Code.
+
 ## 0.5.6
 
 - Clic derecho en una carpeta o archivo .cs/.vb del explorador normal de VS Code → **Mini Studio: Agregar** (Windows Form, clase, interfaz, módulo, carpeta), además del Explorador de soluciones.

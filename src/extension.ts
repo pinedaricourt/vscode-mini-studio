@@ -245,6 +245,13 @@ export function activate(context: vscode.ExtensionContext) {
         updateStatus();
     });
 
+    // Documentación en el idioma de VS Code (español, portugués; inglés para el resto)
+    reg('miniStudio.openDocs', () => {
+        const lang = vscode.env.language.toLowerCase();
+        const file = lang.startsWith('es') ? 'README.md' : lang.startsWith('pt') ? 'docs/README.pt.md' : 'docs/README.en.md';
+        vscode.commands.executeCommand('markdown.showPreview', vscode.Uri.joinPath(context.extensionUri, file));
+    });
+
     reg('miniStudio.addClass', async (arg?: Node | vscode.Uri) => {
         const n = asNode(arg);
         const p = await resolveProject(n);

@@ -2,7 +2,7 @@
   "name": "mini-studio",
   "displayName": "Mini Studio para .NET",
   "description": "Entorno estilo Visual Studio para .NET: explorador de soluciones, compilar, ejecutar y depurar apps de consola y Windows Forms en C# y Visual Basic, plantillas, ejemplos y diseñador visual de formularios.",
-  "version": "0.5.6",
+  "version": "0.5.7",
   "publisher": "ManuelPinedaRicourt",
   "license": "MIT",
   "pricing": "Free",
@@ -236,6 +236,12 @@
         "command": "miniStudio.addModule",
         "title": "Agregar módulo...",
         "category": "Mini Studio"
+      },
+      {
+        "command": "miniStudio.openDocs",
+        "title": "%miniStudio.openDocs.title%",
+        "category": "Mini Studio",
+        "icon": "$(book)"
       }
     ],
     "submenus": [
@@ -320,6 +326,11 @@
           "command": "miniStudio.selectStartupProject",
           "when": "view == miniStudio.solutionExplorer && miniStudio.hasProjects",
           "group": "2_config"
+        },
+        {
+          "command": "miniStudio.openDocs",
+          "when": "view == miniStudio.solutionExplorer",
+          "group": "9_help"
         }
       ],
       "view/item/context": [

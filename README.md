@@ -1,9 +1,13 @@
 # Mini Studio para .NET
 
+**Español** | [English](docs/README.en.md) | [Português](docs/README.pt.md)
+
 Extensión de VS Code con un entorno **estilo Visual Studio** para crear, compilar, ejecutar y depurar
 **aplicaciones de consola** y **Windows Forms** en **C# y Visual Basic**.
 
 > Proyecto independiente: no está afiliado ni respaldado por Microsoft. Visual Studio, Visual Basic y Windows son marcas de Microsoft.
+
+> Dentro de VS Code, **Mini Studio: Documentación** (paleta de comandos o menú **⋯** del Explorador de soluciones) abre esta guía en el idioma de tu VS Code.
 
 ## Funciones
 
@@ -52,6 +56,7 @@ interfaz en cualquier sistema operativo. **Esc** para salir.
   compilado por Canonical y no trae `Microsoft.NET.Sdk.WindowsDesktop`. Instala el de Microsoft en tu carpeta personal
   (no toca el del sistema) y Mini Studio lo usará solo:
   `wget https://dot.net/v1/dotnet-install.sh -O ~/dotnet-install.sh && bash ~/dotnet-install.sh --channel 8.0`
+- La primera vez, Wine puede mostrar líneas `err:ole:start_rpcss` / `err:rpc`: son inofensivas.
 
 ### Diseñador de formularios
 
@@ -70,7 +75,7 @@ interfaz en cualquier sistema operativo. **Esc** para salir.
 ## Requisitos
 
 - [SDK de .NET](https://dotnet.microsoft.com/download) 6 o superior (`dotnet` en el PATH).
-- Windows para ejecutar apps de Windows Forms.
+- Windows (o Linux con Wine) para ejecutar apps de Windows Forms.
 - Para depurar con F5: extensión **C#** (`ms-dotnettools.csharp`).
 - Para proyectos **clásicos de .NET Framework** (los `.csproj` de Visual Studio con `TargetFrameworkVersion`, p. ej. 4.7.2):
   Visual Studio o *Build Tools para Visual Studio*. Mini Studio usa su `MSBuild.exe` automáticamente, porque
