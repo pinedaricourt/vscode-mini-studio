@@ -67,7 +67,7 @@ export class Builder {
         let brokenDotnet = '';
         const handleLine = (line: string) => {
             this.output.appendLine(line);
-            if (/hostfxr|host[\\/]fxr/i.test(line)) { brokenDotnet = line; }
+            if (/hostfxr|host[\\/]fxr|Microsoft\.NET\.Sdk\.WindowsDesktop/i.test(line)) { brokenDotnet = line; }
             const d = parseDiagnostic(line, path.dirname(target));
             if (!d) { return; }
             const key = `${d.file}|${d.diag.range.start.line}|${d.diag.range.start.character}|${d.diag.code}|${d.diag.message}`;

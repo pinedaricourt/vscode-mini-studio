@@ -48,6 +48,10 @@ interfaz en cualquier sistema operativo. **Esc** para salir.
   `/usr/share/dotnet`...) y, si no hay, te dice cómo arreglarlo:
   `sudo apt remove 'dotnet*' 'aspnetcore*' 'netstandard*' && sudo apt install dotnet-sdk-8.0`.
   También puedes fijar la ruta en el ajuste `miniStudio.dotnetPath`.
+- **Windows Forms en Linux necesita el .NET de Microsoft.** El que instala `apt` en Ubuntu (`/usr/lib/dotnet`) está
+  compilado por Canonical y no trae `Microsoft.NET.Sdk.WindowsDesktop`. Instala el de Microsoft en tu carpeta personal
+  (no toca el del sistema) y Mini Studio lo usará solo:
+  `wget https://dot.net/v1/dotnet-install.sh -O ~/dotnet-install.sh && bash ~/dotnet-install.sh --channel 8.0`
 
 ### Diseñador de formularios
 

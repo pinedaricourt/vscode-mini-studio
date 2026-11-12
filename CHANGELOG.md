@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.5.5
+
+- Linux: el .NET empaquetado por Ubuntu/Fedora no trae Microsoft.NET.Sdk.WindowsDesktop. Mini Studio prefiere un .NET de Microsoft (p. ej. ~/.dotnet) para Windows Forms, avisa antes de compilar si no lo hay y ofrece copiar el comando de instalación.
+
 ## 0.5.4
 
 - Linux/macOS: el SDK no trae la plantilla winforms; ahora Mini Studio crea el proyecto Windows Forms (C# y VB, y los ejemplos) por su cuenta, con EnableWindowsTargeting.

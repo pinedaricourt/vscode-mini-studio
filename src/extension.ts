@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
-import { discover, Workspace, ProjectInfo, readCsproj, findProjectForPath, isFormFile, codeFileFor, norm, isLegacyProject, getTargetInfo, runsAs32Bit, wineBuildProps } from './projects';
+import { discover, Workspace, ProjectInfo, readCsproj, findProjectForPath, isFormFile, codeFileFor, norm, isLegacyProject, getTargetInfo, runsAs32Bit, wineBuildProps, isWindowsDesktop } from './projects';
 import { SolutionExplorer, Node } from './solutionExplorer';
 import { Builder, BuildKind } from './builder';
 import { Runner } from './runner';
 import * as templates from './templates';
 import { DesignerPanel } from './designer/designerPanel';
 import { StartPage } from './startPage';
-import { warnIfDotnetBroken } from './dotnet';
+import { warnIfDotnetBroken, canBuildWindowsDesktop, NO_WINDOWS_DESKTOP } from './dotnet';
 import { allowCode, registerOpenByDefault } from './designer/openByDefault';
 
 const CONFIGS = ['Debug', 'Release'];
@@ -143,6 +143,7 @@ export function activate(context: vscode.ExtensionContext) {
         const p = await ensureStartup();
         if (!p) { return; }
         if (builder.isBusy) { return; }
+        if (!(await windowsDesktopReady(p.file))) { return; }
         // El depurador de la extensión C# solo depura procesos de .NET Framework de 64 bits, y los
         // proyectos clásicos traen "Preferir 32 bits" activado: para F5 se compila sin esa preferencia.
         // Fuera de Windows, WinForms se compila autocontenida para win-x64 y se corre con Wine
@@ -312,6 +313,21 @@ export function activate(context: vscode.ExtensionContext) {
     if (!vscode.workspace.workspaceFolders?.length && vscode.workspace.getConfiguration('miniStudio').get<boolean>('startPage.showOnStartup', true)) {
         showStart();
     }
+}
+
+/**
+ * Fuera de Windows, un proyecto de Windows Forms necesita el .NET de Microsoft (el de la distribución no trae
+ * Microsoft.NET.Sdk.WindowsDesktop). Avisa antes de compilar en vez de dejar que falle.
+ */
+async function windowsDesktopReady(projectFile: string): Promise<boolean> {
+    if (process.platform === 'win32' || isLegacyProject(projectFile) || !isWindowsDesktop(projectFile) || canBuildWindowsDesktop()) { return true; }
+    const pick = await vscode.window.showErrorMessage(NO_WINDOWS_DESKTOP, { modal: true }, 'Copiar comando de instalación', 'Abrir simulador');
+    if (pick === 'Copiar comando de instalación') {
+        await vscode.env.clipboard.writeText('wget https://dot.net/v1/dotnet-install.sh -O ~/dotnet-install.sh && bash ~/dotnet-install.sh --channel 8.0');
+        vscode.window.showInformationMessage('Comando copiado: pégalo en una terminal, espera a que termine y luego Recargar ventana.');
+    }
+    if (pick === 'Abrir simulador') { vscode.commands.executeCommand('miniStudio.previewForm', projectFile); }
+    return false;
 }
 
 /** Formulario principal: el de Application.Run(new X()) en Program.cs, o el primero que haya. */

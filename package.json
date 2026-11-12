@@ -2,7 +2,7 @@
   "name": "mini-studio",
   "displayName": "Mini Studio para .NET",
   "description": "Entorno estilo Visual Studio para .NET: explorador de soluciones, compilar, ejecutar y depurar apps de consola y Windows Forms en C# y Visual Basic, plantillas, ejemplos y diseñador visual de formularios.",
-  "version": "0.5.4",
+  "version": "0.5.5",
   "publisher": "ManuelPinedaRicourt",
   "license": "MIT",
   "pricing": "Free",
