@@ -2,7 +2,7 @@
   "name": "mini-studio",
   "displayName": "Mini Studio para .NET",
   "description": "Entorno estilo Visual Studio para .NET: explorador de soluciones, compilar, ejecutar y depurar apps de consola y Windows Forms en C# y Visual Basic, plantillas, ejemplos y diseñador visual de formularios.",
-  "version": "0.5.5",
+  "version": "0.5.6",
   "publisher": "ManuelPinedaRicourt",
   "license": "MIT",
   "pricing": "Free",
@@ -238,7 +238,43 @@
         "category": "Mini Studio"
       }
     ],
+    "submenus": [
+      {
+        "id": "miniStudio.explorerAdd",
+        "label": "Mini Studio: Agregar"
+      }
+    ],
     "menus": {
+      "explorer/context": [
+        {
+          "submenu": "miniStudio.explorerAdd",
+          "when": "miniStudio.hasProjects && (explorerResourceIsFolder || resourceExtname =~ /^\\.(cs|vb|csproj|vbproj)$/)",
+          "group": "2_workspace@9"
+        }
+      ],
+      "miniStudio.explorerAdd": [
+        {
+          "command": "miniStudio.addForm",
+          "group": "1_add@1"
+        },
+        {
+          "command": "miniStudio.addClass",
+          "group": "1_add@2"
+        },
+        {
+          "command": "miniStudio.addInterface",
+          "group": "1_add@3"
+        },
+        {
+          "command": "miniStudio.addModule",
+          "when": "resourceExtname == .vb || resourceExtname == .vbproj",
+          "group": "1_add@4"
+        },
+        {
+          "command": "miniStudio.addFolder",
+          "group": "2_folder@1"
+        }
+      ],
       "view/title": [
         {
           "command": "miniStudio.startPage",

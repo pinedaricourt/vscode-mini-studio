@@ -100,6 +100,16 @@ export function activate(context: vscode.ExtensionContext) {
 
     // ------------------------------------------------------------- utilidades de comandos
     /** Proyecto a partir del nodo del árbol, del archivo activo o preguntando. */
+    /** Clic derecho en el explorador normal de VS Code: llega un Uri en vez de un nodo del árbol. */
+    function asNode(arg?: Node | vscode.Uri): Node | undefined {
+        if (!(arg instanceof vscode.Uri)) { return arg; }
+        let dir = arg.fsPath;
+        try { if (!fs.statSync(dir).isDirectory()) { dir = path.dirname(dir); } } catch { dir = path.dirname(dir); }
+        const p = findProjectForPath(ws, path.join(dir, '_'));
+        if (!p) { return undefined; }   // fuera de un proyecto: se pregunta cuál, como desde la paleta
+        return new Node('folder', path.basename(dir), vscode.TreeItemCollapsibleState.None, dir, p);
+    }
+
     async function resolveProject(n?: Node): Promise<ProjectInfo | undefined> {
         if (n?.project) { return n.project; }
         const active = vscode.window.activeTextEditor?.document.uri.fsPath;
@@ -235,25 +245,30 @@ export function activate(context: vscode.ExtensionContext) {
         updateStatus();
     });
 
-    reg('miniStudio.addClass', async (n?: Node) => {
+    reg('miniStudio.addClass', async (arg?: Node | vscode.Uri) => {
+        const n = asNode(arg);
         const p = await resolveProject(n);
         if (p) { await templates.addClass(p, folderOf(n, p), 'class'); }
     });
-    reg('miniStudio.addInterface', async (n?: Node) => {
+    reg('miniStudio.addInterface', async (arg?: Node | vscode.Uri) => {
+        const n = asNode(arg);
         const p = await resolveProject(n);
         if (p) { await templates.addClass(p, folderOf(n, p), 'interface'); }
     });
-    reg('miniStudio.addModule', async (n?: Node) => {
+    reg('miniStudio.addModule', async (arg?: Node | vscode.Uri) => {
+        const n = asNode(arg);
         const p = await resolveProject(n);
         if (p) { await templates.addClass(p, folderOf(n, p), 'module'); }
     });
-    reg('miniStudio.addForm', async (n?: Node) => {
+    reg('miniStudio.addForm', async (arg?: Node | vscode.Uri) => {
+        const n = asNode(arg);
         const p = await resolveProject(n);
         if (!p) { return; }
         const file = await templates.addForm(p, folderOf(n, p));
         if (file) { await refresh(); DesignerPanel.open(context, file); }
     });
-    reg('miniStudio.addFolder', async (n?: Node) => {
+    reg('miniStudio.addFolder', async (arg?: Node | vscode.Uri) => {
+        const n = asNode(arg);
         const p = await resolveProject(n);
         if (p) { await templates.addFolder(n?.kind === 'folder' && n.fsPath ? n.fsPath : p.dir); }
     });

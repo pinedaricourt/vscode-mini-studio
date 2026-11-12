@@ -17,7 +17,7 @@ Extensión de VS Code con un entorno **estilo Visual Studio** para crear, compil
 | Iniciar sin depurar (Ctrl+F5) | Consola en la terminal integrada (o en una ventana aparte que espera una tecla, como VS); WinForms se lanza como proceso |
 | Iniciar depuración (F5) | Depurador `coreclr` de la extensión C# de Microsoft (te ofrece instalarla si falta) |
 | Detener (Shift+F5) | Cierra la app en ejecución |
-| Agregar → Clase / Interfaz / Módulo (VB) / Windows Form / Carpeta | Clic derecho en un proyecto o carpeta; el espacio de nombres se calcula según la carpeta |
+| Agregar → Clase / Interfaz / Módulo (VB) / Windows Form / Carpeta | Clic derecho en un proyecto o carpeta del Explorador de soluciones, o en el explorador normal → *Mini Studio: Agregar*; el espacio de nombres se calcula según la carpeta |
 | Administrar paquetes NuGet | *Agregar paquete NuGet...* (`Id` o `Id@versión`) y quitar desde Dependencias |
 | Diseñador de Windows Forms | Al abrir un formulario (desde cualquier explorador) sale el **diseñador**, como en VS. Ver código con **F7**; volver al diseño con **Shift+F7** |
 

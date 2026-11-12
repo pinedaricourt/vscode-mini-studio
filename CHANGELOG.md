@@ -1,5 +1,9 @@
 # Cambios
 
+## 0.5.6
+
+- Clic derecho en una carpeta o archivo .cs/.vb del explorador normal de VS Code → **Mini Studio: Agregar** (Windows Form, clase, interfaz, módulo, carpeta), además del Explorador de soluciones.
+
 ## 0.5.5
 
 - Linux: el .NET empaquetado por Ubuntu/Fedora no trae Microsoft.NET.Sdk.WindowsDesktop. Mini Studio prefiere un .NET de Microsoft (p. ej. ~/.dotnet) para Windows Forms, avisa antes de compilar si no lo hay y ofrece copiar el comando de instalación.
